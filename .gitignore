@@ -1,22 +1,41 @@
-# Secrets — never commit these
+# ─── Secrets — never commit ──────────────────────────────────
 .env
 *.env
 secrets/
 
-# Python
+# ─── Python ──────────────────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
 .venv/
 venv/
+env/
+*.egg-info/
+dist/
+build/
 
-# ML model files (too large for GitHub)
+# ─── ML models (too large for GitHub) ────────────────────────
 *.pkl
 *.joblib
-models/
+models/*.joblib
+models/*.pkl
 
-# Jupyter checkpoints
+# ─── Jupyter ─────────────────────────────────────────────────
 .ipynb_checkpoints/
+*.ipynb_checkpoints
 
-# IDE
+# ─── Data files (use seed.py instead) ────────────────────────
+data/
+*.csv
+*.parquet
+
+# ─── IDE ─────────────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
+.DS_Store
+
+# ─── Logs ────────────────────────────────────────────────────
+*.log
+logs/
