@@ -1,0 +1,22 @@
+# Secrets — never commit these
+.env
+*.env
+secrets/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ML model files (too large for GitHub)
+*.pkl
+*.joblib
+models/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
