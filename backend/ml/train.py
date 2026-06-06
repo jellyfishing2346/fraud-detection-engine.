@@ -11,29 +11,29 @@ Downloads:
 
 import argparse
 import os
+from datetime import datetime
+
 import joblib
 import numpy as np
 import pandas as pd
-from datetime import datetime
-
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
-from sklearn.preprocessing import StandardScaler
 from imblearn.over_sampling import SMOTE
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
-
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-FRAUD_THRESHOLD = 0.4       # score >= this → flagged
-RANDOM_STATE    = 42
-TEST_SIZE       = 0.2
-MODEL_DIR       = "models"
-MODEL_NAME      = "xgb_fraud_v1.joblib"
-SCALER_NAME     = "scaler_v1.joblib"
+FRAUD_THRESHOLD = 0.4  # score >= this → flagged
+RANDOM_STATE = 42
+TEST_SIZE = 0.2
+MODEL_DIR = "models"
+MODEL_NAME = "xgb_fraud_v1.joblib"
+SCALER_NAME = "scaler_v1.joblib"
 
 
 # ─── Feature engineering ─────────────────────────────────────────────────────
+
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -63,11 +63,12 @@ def get_feature_columns(df: pd.DataFrame) -> list:
 
 # ─── Training ────────────────────────────────────────────────────────────────
 
+
 def train(data_path: str):
-    print(f"\n{'='*55}")
-    print(f"  Fraud Detection Model Training")
+    print(f"\n{'=' * 55}")
+    print("  Fraud Detection Model Training")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"{'='*55}\n")
+    print(f"{'=' * 55}\n")
 
     # 1. Load data
     print("1. Loading dataset...")
@@ -96,14 +97,16 @@ def train(data_path: str):
     print("\n4. Scaling features...")
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled  = scaler.transform(X_test)
+    X_test_scaled = scaler.transform(X_test)
 
     # 5. SMOTE oversampling — fixes the 0.17% fraud class imbalance
     print("\n5. Applying SMOTE oversampling...")
     smote = SMOTE(random_state=RANDOM_STATE)
     X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
     print(f"   Before: {y_train.sum():,} fraud / {len(y_train):,} total")
-    print(f"   After:  {y_train_resampled.sum():,} fraud / {len(y_train_resampled):,} total")
+    print(
+        f"   After:  {y_train_resampled.sum():,} fraud / {len(y_train_resampled):,} total"
+    )
 
     # 6. Train XGBoost
     print("\n6. Training XGBoost classifier...")
@@ -113,7 +116,7 @@ def train(data_path: str):
         learning_rate=0.1,
         subsample=0.8,
         colsample_bytree=0.8,
-        scale_pos_weight=1,     # SMOTE handles balancing, so keep this at 1
+        scale_pos_weight=1,  # SMOTE handles balancing, so keep this at 1
         random_state=RANDOM_STATE,
         eval_metric="logloss",
         verbosity=0,
@@ -124,7 +127,7 @@ def train(data_path: str):
     # 7. Evaluate at our chosen threshold
     print(f"\n7. Evaluating at threshold = {FRAUD_THRESHOLD}...")
     y_proba = model.predict_proba(X_test_scaled)[:, 1]
-    y_pred  = (y_proba >= FRAUD_THRESHOLD).astype(int)
+    y_pred = (y_proba >= FRAUD_THRESHOLD).astype(int)
 
     print("\n   Classification report:")
     print(classification_report(y_test, y_pred, target_names=["Legit", "Fraud"]))
@@ -137,7 +140,7 @@ def train(data_path: str):
 
     roc = roc_auc_score(y_test, y_proba)
     recall = cm[1][1] / (cm[1][0] + cm[1][1])
-    fpr    = cm[0][1] / (cm[0][0] + cm[0][1])
+    fpr = cm[0][1] / (cm[0][0] + cm[0][1])
     print(f"\n   ROC-AUC:      {roc:.4f}")
     print(f"   Recall:       {recall:.4f}  (fraud caught — higher is better)")
     print(f"   False pos rate: {fpr:.4f}  (legit flagged — lower is better)")
@@ -148,11 +151,11 @@ def train(data_path: str):
         print("\n   ✓  Recall target met (≥ 0.80).")
 
     # 8. Save model and scaler
-    print(f"\n8. Saving model...")
+    print("\n8. Saving model...")
     os.makedirs(MODEL_DIR, exist_ok=True)
-    model_path  = os.path.join(MODEL_DIR, MODEL_NAME)
+    model_path = os.path.join(MODEL_DIR, MODEL_NAME)
     scaler_path = os.path.join(MODEL_DIR, SCALER_NAME)
-    joblib.dump(model,  model_path)
+    joblib.dump(model, model_path)
     joblib.dump(scaler, scaler_path)
     print(f"   Model  → {model_path}")
     print(f"   Scaler → {scaler_path}")
@@ -163,9 +166,9 @@ def train(data_path: str):
         f.write("\n".join(feature_cols))
     print(f"   Features → {feature_path}")
 
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print("  Training complete. Ready for week 3.")
-    print(f"{'='*55}\n")
+    print(f"{'=' * 55}\n")
 
 
 # ─── Entry point ─────────────────────────────────────────────────────────────

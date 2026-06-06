@@ -1,0 +1,24 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (unused imports, undefined names)
+    "I",   # isort (import ordering)
+    "B",   # flake8-bugbear (common bugs)
+    "UP",  # pyupgrade (modern Python syntax)
+]
+ignore = [
+    "E501",  # line too long — ruff formatter handles this
+    "B008",  # do not perform function calls in default arguments (FastAPI uses this)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/*" = ["E", "W", "F", "I"]  # don't lint notebooks
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
