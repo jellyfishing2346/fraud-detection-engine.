@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
 from dotenv import load_dotenv
-import os
+from fastapi import FastAPI
 
 load_dotenv()
 

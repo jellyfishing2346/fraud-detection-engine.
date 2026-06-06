@@ -1,0 +1,23 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      # Lint
+      - id: ruff
+        args: [--fix]
+      # Format
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Prevent committing secrets / large files
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      # Catch basic mistakes
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: debug-statements   # catches leftover print/breakpoint calls
