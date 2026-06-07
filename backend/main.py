@@ -17,7 +17,10 @@ async def lifespan(app: FastAPI):
     try:
         load_model()
     except Exception as e:
+        import traceback
+
         print(f"Warning: Model not loaded — {e}")
+        traceback.print_exc()
     print("Ready.")
     yield
     print("Shutting down...")
