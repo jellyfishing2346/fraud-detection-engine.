@@ -34,3 +34,17 @@ app.include_router(alerts_router, prefix="/v1", tags=["Alerts"])
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "0.1.0"}
+
+
+import os  # noqa: E402
+
+from fastapi.responses import FileResponse  # noqa: E402
+
+
+@app.get("/dashboard")
+def dashboard():
+    return FileResponse(
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "../frontend/dashboard.html"
+        )
+    )
