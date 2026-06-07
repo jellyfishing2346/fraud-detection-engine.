@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fraud Review Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0b0d;
+      --surface:   #111317;
+      --surface2:  #191c22;
+      --border:    #1e2330;
+      --border2:   #2a3040;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --accent:    #f97316;
+      --accent2:   #fb923c;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --yellow:    #eab308;
+      --blue:      #3b82f6;
+      --mono:      'IBM Plex Mono', monospace;
+      --sans:      'IBM Plex Sans', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+    }
+    .logo-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+    .header-meta { display: flex; align-items: center; gap: 1.5rem; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    .live-badge { display: flex; align-items: center; gap: 6px; color: var(--green); }
+    .live-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse 1.5s infinite; }
+
+    /* ── Layout ── */
+    .layout { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 56px); }
+    .sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .main { overflow-y: auto; }
+
+    /* ── Metrics bar ── */
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+    .metric { background: var(--surface); padding: 1rem 1.25rem; }
+    .metric-label { font-size: 10px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 4px; }
+    .metric-val { font-size: 22px; font-weight: 600; font-family: var(--mono); }
+    .metric-val.red { color: var(--red); }
+    .metric-val.green { color: var(--green); }
+    .metric-val.yellow { color: var(--yellow); }
+    .metric-val.blue { color: var(--blue); }
+
+    /* ── Sidebar filters ── */
+    .sidebar-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .sidebar-title { font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+    .filter-row { padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+    .filter-btn { flex: 1; padding: 5px; font-size: 11px; font-family: var(--mono); border: 1px solid var(--border2); background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer; transition: all 0.15s; }
+    .filter-btn.active { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+    .filter-btn:hover:not(.active) { border-color: var(--border2); color: var(--text); }
+
+    /* ── Alert list ── */
+    .alert-list { flex: 1; overflow-y: auto; }
+    .alert-item { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; position: relative; }
+    .alert-item:hover { background: var(--surface); }
+    .alert-item.selected { background: var(--surface2); border-left: 2px solid var(--accent); }
+    .alert-item.escalated::after { content: '!'; position: absolute; top: 8px; right: 10px; width: 16px; height: 16px; background: var(--red); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; }
+    .alert-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .alert-id { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .severity-badge { font-size: 9px; font-family: var(--mono); font-weight: 600; padding: 2px 7px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .sev-high { background: rgba(239,68,68,0.15); color: var(--red); }
+    .sev-medium { background: rgba(234,179,8,0.15); color: var(--yellow); }
+    .sev-low { background: rgba(34,197,94,0.15); color: var(--green); }
+    .alert-amount { font-size: 16px; font-weight: 600; font-family: var(--mono); margin-bottom: 4px; }
+    .alert-meta { display: flex; align-items: center; justify-content: space-between; }
+    .alert-score { font-size: 11px; font-family: var(--mono); color: var(--accent); }
+    .alert-time { font-size: 10px; color: var(--muted); }
+    .sla-bar { height: 2px; background: var(--border); margin-top: 8px; border-radius: 1px; overflow: hidden; }
+    .sla-fill { height: 100%; border-radius: 1px; transition: width 0.3s; }
+
+    /* ── Detail panel ── */
+    .detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); gap: 12px; }
+    .detail-empty-icon { font-size: 40px; opacity: 0.3; }
+    .detail-empty p { font-size: 13px; font-family: var(--mono); }
+
+    .detail-panel { padding: 2rem; max-width: 800px; }
+    .detail-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    .detail-title { font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 8px; }
+    .detail-amount { font-size: 36px; font-weight: 600; font-family: var(--mono); letter-spacing: -1px; }
+    .detail-badges { display: flex; gap: 8px; margin-top: 10px; }
+    .detail-badge { font-size: 10px; font-family: var(--mono); padding: 3px 9px; border-radius: 3px; border: 1px solid var(--border2); color: var(--muted); }
+
+    .score-display { text-align: right; }
+    .score-label { font-size: 10px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 4px; }
+    .score-num { font-size: 48px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+    .score-num.flagged { color: var(--red); }
+    .score-num.approved { color: var(--green); }
+
+    .section { margin-bottom: 1.75rem; }
+    .section-label { font-size: 10px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+    .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+    .feature-name { font-size: 10px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px; }
+    .feature-val { font-size: 16px; font-weight: 600; font-family: var(--mono); }
+    .feature-val.highlight { color: var(--accent); }
+
+    .txn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .txn-row { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+    .txn-key { font-size: 10px; font-family: var(--mono); color: var(--muted); margin-bottom: 3px; }
+    .txn-val { font-size: 13px; font-family: var(--mono); word-break: break-all; }
+
+    /* ── Verdict form ── */
+    .verdict-form { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+    .verdict-title { font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 12px; }
+    .verdict-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .verdict-btn { padding: 10px; font-family: var(--mono); font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--muted); transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.05em; }
+    .verdict-btn.selected-confirm { background: rgba(239,68,68,0.1); border-color: var(--red); color: var(--red); }
+    .verdict-btn.selected-fp { background: rgba(34,197,94,0.1); border-color: var(--green); color: var(--green); }
+    .verdict-btn:hover { border-color: var(--border2); color: var(--text); }
+    .notes-input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: var(--mono); font-size: 12px; resize: none; margin-bottom: 12px; outline: none; }
+    .notes-input:focus { border-color: var(--accent); }
+    .submit-btn { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; transition: opacity 0.15s; }
+    .submit-btn:hover { opacity: 0.9; }
+    .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .sla-section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; }
+    .sla-label { font-size: 10px; font-family: var(--mono); color: var(--muted); }
+    .sla-countdown { font-size: 16px; font-family: var(--mono); font-weight: 600; }
+    .sla-countdown.urgent { color: var(--red); animation: pulse 1s infinite; }
+    .sla-countdown.warning { color: var(--yellow); }
+    .sla-countdown.ok { color: var(--green); }
+
+    .toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 12px 18px; font-family: var(--mono); font-size: 12px; z-index: 999; animation: slideUp 0.3s ease; }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast.success { border-color: var(--green); color: var(--green); }
+    .toast.error { border-color: var(--red); color: var(--red); }
+
+    .empty-state { padding: 3rem; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+
+    .refresh-btn { font-size: 11px; font-family: var(--mono); padding: 4px 10px; border: 1px solid var(--border2); background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer; }
+    .refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    FRAUD REVIEW CONSOLE
+  </div>
+  <div class="header-meta">
+    <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+    <span id="last-updated">—</span>
+  </div>
+</header>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-label">Open alerts</div>
+    <div class="metric-val red" id="m-open">—</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Closed today</div>
+    <div class="metric-val green" id="m-closed">—</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Escalated</div>
+    <div class="metric-val yellow" id="m-escalated">—</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">False positive rate</div>
+    <div class="metric-val blue" id="m-fpr">—</div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Alerts</span>
+      <button class="refresh-btn" onclick="loadAlerts()">↻ Refresh</button>
+    </div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setFilter('open', this)">Open</button>
+      <button class="filter-btn" onclick="setFilter('in_review', this)">In Review</button>
+      <button class="filter-btn" onclick="setFilter('closed', this)">Closed</button>
+    </div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setSeverity('', this)">All</button>
+      <button class="filter-btn" onclick="setSeverity('high', this)">High</button>
+      <button class="filter-btn" onclick="setSeverity('medium', this)">Med</button>
+      <button class="filter-btn" onclick="setSeverity('low', this)">Low</button>
+    </div>
+    <div class="alert-list" id="alert-list">
+      <div class="empty-state">Loading alerts...</div>
+    </div>
+  </div>
+
+  <div class="main" id="main-panel">
+    <div class="detail-empty">
+      <div class="detail-empty-icon">⬡</div>
+      <p>Select an alert to review</p>
+    </div>
+  </div>
+</div>
+
+<div id="toast" style="display:none" class="toast"></div>
+
+<script>
+  const API = 'http://localhost:8000/v1';
+  let alerts = [];
+  let selectedAlert = null;
+  let currentFilter = 'open';
+  let currentSeverity = '';
+  let verdict = null;
+  let closedToday = 0;
+  let fpCount = 0;
+  let closedCount = 0;
+
+  // ── Filters ──────────────────────────────────────────────────
+
+  function setFilter(state, btn) {
+    currentFilter = state;
+    document.querySelectorAll('.filter-row:nth-child(3) .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAlerts();
+  }
+
+  function setSeverity(sev, btn) {
+    currentSeverity = sev;
+    document.querySelectorAll('.filter-row:nth-child(4) .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAlerts();
+  }
+
+  // ── Data loading ─────────────────────────────────────────────
+
+  async function loadAlerts() {
+    let url = `${API}/alerts?state=${currentFilter}&limit=50`;
+    if (currentSeverity) url += `&severity=${currentSeverity}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      alerts = data.alerts || [];
+      renderAlertList();
+      updateMetrics();
+      document.getElementById('last-updated').textContent =
+        new Date().toLocaleTimeString();
+    } catch (e) {
+      document.getElementById('alert-list').innerHTML =
+        '<div class="empty-state">Could not connect to API.<br/>Is the server running?</div>';
+    }
+  }
+
+  async function loadAlertDetail(alertId) {
+    const res = await fetch(`${API}/alerts/${alertId}`);
+    return res.json();
+  }
+
+  // ── Render alert list ─────────────────────────────────────────
+
+  function renderAlertList() {
+    const container = document.getElementById('alert-list');
+    if (!alerts.length) {
+      container.innerHTML = '<div class="empty-state">No alerts found.</div>';
+      return;
+    }
+    container.innerHTML = alerts.map(a => {
+      const slaMs = new Date(a.sla_deadline) - new Date();
+      const slaPct = Math.max(0, Math.min(100, (slaMs / (4 * 3600 * 1000)) * 100));
+      const slaColor = slaPct < 25 ? '#ef4444' : slaPct < 50 ? '#eab308' : '#22c55e';
+      const amount = a.amount_cents ? `$${(a.amount_cents/100).toLocaleString('en-US', {minimumFractionDigits:2})}` : '—';
+      return `
+        <div class="alert-item ${selectedAlert?.alert_id === a.alert_id ? 'selected' : ''} ${a.escalated ? 'escalated' : ''}"
+             onclick="selectAlert('${a.alert_id}')">
+          <div class="alert-top">
+            <span class="alert-id">${a.alert_id.slice(0,8)}...</span>
+            <span class="severity-badge sev-${a.severity}">${a.severity}</span>
+          </div>
+          <div class="alert-amount">${amount}</div>
+          <div class="alert-meta">
+            <span class="alert-score">score ${a.score.toFixed(4)}</span>
+            <span class="alert-time">${timeAgo(a.created_at)}</span>
+          </div>
+          <div class="sla-bar">
+            <div class="sla-fill" style="width:${slaPct}%;background:${slaColor}"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Select alert ──────────────────────────────────────────────
+
+  async function selectAlert(alertId) {
+    const summary = alerts.find(a => a.alert_id === alertId);
+    selectedAlert = summary;
+    verdict = null;
+    renderAlertList();
+    document.getElementById('main-panel').innerHTML =
+      '<div class="detail-empty"><p style="font-family:var(--mono);font-size:12px;color:var(--muted)">Loading...</p></div>';
+    try {
+      const detail = await loadAlertDetail(alertId);
+      renderDetail(detail);
+    } catch (e) {
+      renderDetail(summary);
+    }
+  }
+
+  // ── Render detail ─────────────────────────────────────────────
+
+  function renderDetail(a) {
+    const isFlagged = a.score >= 0.4;
+    const amount = a.amount_cents
+      ? `$${(a.amount_cents/100).toLocaleString('en-US', {minimumFractionDigits:2})}`
+      : '—';
+    const slaMs = new Date(a.sla_deadline) - new Date();
+    const slaHrs = Math.floor(slaMs / 3600000);
+    const slaMins = Math.floor((slaMs % 3600000) / 60000);
+    const slaClass = slaMs < 900000 ? 'urgent' : slaMs < 3600000 ? 'warning' : 'ok';
+    const slaText = slaMs < 0 ? 'SLA BREACHED' : `${slaHrs}h ${slaMins}m remaining`;
+
+    const features = a.top_features || {};
+    const isClosed = a.state === 'closed';
+
+    document.getElementById('main-panel').innerHTML = `
+      <div class="detail-panel">
+        <div class="detail-header">
+          <div>
+            <div class="detail-title">Alert ${a.alert_id?.slice(0,8) || '—'}...</div>
+            <div class="detail-amount">${amount}</div>
+            <div class="detail-badges">
+              <span class="detail-badge severity-badge sev-${a.severity}">${a.severity}</span>
+              <span class="detail-badge">${a.state}</span>
+              ${a.escalated ? '<span class="detail-badge" style="border-color:#ef4444;color:#ef4444">ESCALATED</span>' : ''}
+            </div>
+          </div>
+          <div class="score-display">
+            <div class="score-label">Fraud score</div>
+            <div class="score-num ${isFlagged ? 'flagged' : 'approved'}">${a.score?.toFixed(4) || '—'}</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="sla-section">
+            <div>
+              <div class="sla-label">SLA deadline</div>
+              <div style="font-size:12px;font-family:var(--mono);margin-top:2px">${new Date(a.sla_deadline).toLocaleString()}</div>
+            </div>
+            <div class="sla-countdown ${slaClass}">${slaText}</div>
+          </div>
+        </div>
+
+        ${Object.keys(features).length ? `
+        <div class="section">
+          <div class="section-label">Feature breakdown</div>
+          <div class="feature-grid">
+            ${Object.entries(features).map(([k, v]) => `
+              <div class="feature-card">
+                <div class="feature-name">${k}</div>
+                <div class="feature-val ${Math.abs(parseFloat(v)) > 1 ? 'highlight' : ''}">${parseFloat(v).toFixed(4)}</div>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
+        <div class="section">
+          <div class="section-label">Transaction details</div>
+          <div class="txn-grid">
+            <div class="txn-row"><div class="txn-key">Transaction ID</div><div class="txn-val">${a.transaction_id || '—'}</div></div>
+            <div class="txn-row"><div class="txn-key">Currency</div><div class="txn-val">${a.currency || 'USD'}</div></div>
+            <div class="txn-row"><div class="txn-key">Country</div><div class="txn-val">${a.country_code || '—'}</div></div>
+            <div class="txn-row"><div class="txn-key">Created</div><div class="txn-val">${new Date(a.created_at).toLocaleString()}</div></div>
+          </div>
+        </div>
+
+        ${!isClosed ? `
+        <div class="section">
+          <div class="verdict-form">
+            <div class="verdict-title">Submit verdict</div>
+            <div class="verdict-btns">
+              <button class="verdict-btn" id="btn-confirm" onclick="setVerdict('confirmed')">🚨 Confirmed fraud</button>
+              <button class="verdict-btn" id="btn-fp" onclick="setVerdict('false_positive')">✓ False positive</button>
+            </div>
+            <textarea class="notes-input" id="notes-input" rows="3" placeholder="Add notes (optional)..."></textarea>
+            <button class="submit-btn" id="submit-btn" onclick="submitVerdict('${a.alert_id}')" disabled>
+              Submit verdict
+            </button>
+          </div>
+        </div>` : `
+        <div class="section">
+          <div class="verdict-form" style="opacity:0.6">
+            <div class="verdict-title">Alert closed</div>
+            <p style="font-size:12px;font-family:var(--mono);color:var(--muted)">This alert has already been reviewed and closed.</p>
+          </div>
+        </div>`}
+      </div>`;
+  }
+
+  // ── Verdict ───────────────────────────────────────────────────
+
+  function setVerdict(v) {
+    verdict = v;
+    const btnConfirm = document.getElementById('btn-confirm');
+    const btnFp = document.getElementById('btn-fp');
+    const submitBtn = document.getElementById('submit-btn');
+    if (!btnConfirm) return;
+    btnConfirm.className = 'verdict-btn' + (v === 'confirmed' ? ' selected-confirm' : '');
+    btnFp.className = 'verdict-btn' + (v === 'false_positive' ? ' selected-fp' : '');
+    submitBtn.disabled = false;
+  }
+
+  async function submitVerdict(alertId) {
+    if (!verdict) return;
+    const notes = document.getElementById('notes-input')?.value || '';
+    const submitBtn = document.getElementById('submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    try {
+      const res = await fetch(`${API}/alerts/${alertId}/review`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verdict, notes }),
+      });
+      if (res.ok) {
+        if (verdict === 'false_positive') fpCount++;
+        closedCount++;
+        closedToday++;
+        showToast(`Verdict submitted: ${verdict.replace('_', ' ')}`, 'success');
+        verdict = null;
+        await loadAlerts();
+        document.getElementById('main-panel').innerHTML =
+          '<div class="detail-empty"><div class="detail-empty-icon">⬡</div><p>Select an alert to review</p></div>';
+        selectedAlert = null;
+      } else {
+        showToast('Failed to submit verdict', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit verdict';
+      }
+    } catch (e) {
+      showToast('Network error', 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit verdict';
+    }
+  }
+
+  // ── Metrics ───────────────────────────────────────────────────
+
+  function updateMetrics() {
+    const open = alerts.filter(a => a.state === 'open').length;
+    const escalated = alerts.filter(a => a.escalated).length;
+    const fpr = closedCount > 0 ? ((fpCount / closedCount) * 100).toFixed(1) + '%' : '—';
+    document.getElementById('m-open').textContent = open;
+    document.getElementById('m-closed').textContent = closedToday;
+    document.getElementById('m-escalated').textContent = escalated;
+    document.getElementById('m-fpr').textContent = fpr;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+
+  function timeAgo(iso) {
+    const diff = Date.now() - new Date(iso);
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    return `${Math.floor(mins/60)}h ago`;
+  }
+
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type}`;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────
+
+  loadAlerts();
+  setInterval(loadAlerts, 30000); // auto-refresh every 30s
+</script>
+</body>
+</html>
