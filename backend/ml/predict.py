@@ -10,24 +10,22 @@ from datetime import datetime
 
 import joblib
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 from ml.features import build_features, post_score_update
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
 MODEL_PATH = os.getenv("MODEL_PATH", "models/xgb_fraud_v1.joblib")
-SCALER_PATH = os.getenv("SCALER_PATH", "models/scaler_v1.joblib")
+SCALER_MEAN_PATH = os.getenv("SCALER_MEAN_PATH", "models/scaler_mean.npy")
+SCALER_SCALE_PATH = os.getenv("SCALER_SCALE_PATH", "models/scaler_scale.npy")
 FEATURES_PATH = os.getenv("FEATURES_PATH", "models/feature_columns.txt")
 THRESHOLD = float(os.getenv("FRAUD_SCORE_THRESHOLD", "0.4"))
 MODEL_VERSION = os.getenv("MODEL_VERSION", "xgb-v1.0.0")
 
-# Loaded once at startup
 _model = None
 _scaler = None
 _feature_cols = None
-
-
-# ─── Loader ───────────────────────────────────────────────────────────────────
 
 
 def load_model() -> None:
@@ -41,15 +39,18 @@ def load_model() -> None:
         )
 
     _model = joblib.load(MODEL_PATH)
-    _scaler = joblib.load(SCALER_PATH)
+
+    # Load scaler from numpy arrays — avoids pickle version incompatibility
+    _scaler = StandardScaler()
+    _scaler.mean_ = np.load(SCALER_MEAN_PATH)
+    _scaler.scale_ = np.load(SCALER_SCALE_PATH)
+    _scaler.var_ = _scaler.scale_**2
+    _scaler.n_features_in_ = len(_scaler.mean_)
 
     with open(FEATURES_PATH) as f:
         _feature_cols = [line.strip() for line in f.readlines()]
 
     print(f"Model loaded: {MODEL_VERSION} ({len(_feature_cols)} features)")
-
-
-# ─── Scorer ───────────────────────────────────────────────────────────────────
 
 
 def score_transaction(
@@ -61,24 +62,12 @@ def score_transaction(
     lon: float | None = None,
     update_redis: bool = True,
 ) -> dict:
-    """
-    Score a single transaction using live Redis features.
-    Target latency: < 50ms.
-
-    Args:
-        user_id:        UUID string of the user
-        transaction_id: UUID string of this transaction
-        amount_cents:   transaction amount in cents
-        occurred_at:    transaction datetime
-        lat/lon:        optional transaction location
-        update_redis:   if True, update velocity + location after scoring
-    """
+    """Score a single transaction using live Redis features."""
     if _model is None:
         raise RuntimeError("Model not loaded. Call load_model() first.")
 
     start = time.perf_counter()
 
-    # 1. Build features from Redis + transaction data
     features = build_features(
         user_id=str(user_id),
         transaction_id=str(transaction_id),
@@ -88,17 +77,12 @@ def score_transaction(
         lon=lon,
     )
 
-    # 2. Build feature vector — fill unknown columns with 0
-    # (V1-V28 PCA features not available in production)
     feature_vector = np.array([[features.get(col, 0.0) for col in _feature_cols]])
     feature_vector_scaled = _scaler.transform(feature_vector)
 
-    # 3. Score
     score = float(_model.predict_proba(feature_vector_scaled)[0][1])
-
     latency_ms = int((time.perf_counter() - start) * 1000)
 
-    # 4. Update Redis after scoring (not before — don't count this txn)
     if update_redis:
         post_score_update(
             user_id=str(user_id),
