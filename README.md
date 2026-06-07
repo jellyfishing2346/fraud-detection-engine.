@@ -20,7 +20,7 @@ D E T E C T I O N   E N G I N E
 [![Kafka](https://img.shields.io/badge/Kafka-KRaft_Mode-231F20?style=flat-square&logo=apache-kafka)](https://kafka.apache.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql)](https://postgresql.org)
 
-[**▶ Watch Demo**](#demo) · [**📖 Docs**](docs/) · [**🚀 Quickstart**](#quickstart) · [**🏗 Architecture**](#architecture)
+[**▶ Live Dashboard**](https://sparkling-brioche-94b5f2.netlify.app/dashboard.html) · [**API Docs**](https://fraud-detection-engine-ozjc.onrender.com/docs) · [**📖 Docs**](docs/) · [**🚀 Quickstart**](#quickstart) · [**🏗 Architecture**](#architecture)
 
 </div>
 
@@ -39,9 +39,18 @@ Transaction arrives → Kafka → ML Scoring (2ms) → Approved ✓
 
 ---
 
-## Demo
+## Live Demo
 
-![Fraud Detection Engine — GIF recording](<Fraud Review Console Walkthrough.gif>)
+| | URL |
+|---|---|
+| 🖥 **Reviewer Dashboard** | https://sparkling-brioche-94b5f2.netlify.app/dashboard.html |
+| 📡 **API** | https://fraud-detection-engine-ozjc.onrender.com |
+| 📖 **API Docs** | https://fraud-detection-engine-ozjc.onrender.com/docs |
+| ❤️ **Health Check** | https://fraud-detection-engine-ozjc.onrender.com/health |
+
+> **Note:** API is hosted on Render free tier — first request after inactivity may take ~50 seconds to wake up.
+
+![Fraud Detection Engine Demo](<Fraud Review Console Walkthrough.gif>)
 
 ---
 
@@ -93,10 +102,10 @@ Transaction arrives → Kafka → ML Scoring (2ms) → Approved ✓
 └──────────────────┘        └──────────────┬─────────────┘
                                            │
                                            ▼
-                             ┌─────────────────────────────┐
-                             │   REVIEWER DASHBOARD        │
-                             │   localhost:8000/dashboard  │
-                             └─────────────────────────────┘
+                             ┌──────────────────────────────────────┐
+                             │   REVIEWER DASHBOARD                 │
+                             │   sparkling-brioche-94b5f2.netlify   │
+                             └──────────────────────────────────────┘
 ```
 
 ---
@@ -162,9 +171,10 @@ python3.12 -m uvicorn main:app --reload
 
 | URL | Description |
 |---|---|
-| http://localhost:8000/dashboard | Reviewer dashboard |
-| http://localhost:8000/docs | Swagger API docs |
-| http://localhost:8000/health | Health check |
+| http://localhost:8000/dashboard | Local reviewer dashboard |
+| http://localhost:8000/docs | Local API docs |
+| https://sparkling-brioche-94b5f2.netlify.app/dashboard.html | Live reviewer dashboard |
+| https://fraud-detection-engine-ozjc.onrender.com/docs | Live API docs |
 
 ---
 
@@ -212,7 +222,7 @@ cd backend && python3.12 -m pytest tests/ -v
 | **Week 5** | pytest suite 6/6 · SLA escalation job · branch protection |
 | **Week 6** | Kafka producer + consumer · idempotent offset handling |
 | **Week 7** | Reviewer dashboard · verdict submission · CORS middleware |
-| **Week 8** | Seed data · full documentation suite · GIF recording |
+| **Week 8** | Seed data · full documentation suite · deployed to Render + Netlify |
 
 ---
 
