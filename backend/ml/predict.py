@@ -47,8 +47,8 @@ def load_model() -> None:
     _scaler.var_ = _scaler.scale_**2
     _scaler.n_features_in_ = len(_scaler.mean_)
 
-    with open(FEATURES_PATH) as f:
-        _feature_cols = [line.strip() for line in f.readlines()]
+    with open(FEATURES_PATH, encoding="utf-8") as f:
+        _feature_cols = [line.strip() for line in f.readlines() if line.strip()]
 
     print(f"Model loaded: {MODEL_VERSION} ({len(_feature_cols)} features)")
 
