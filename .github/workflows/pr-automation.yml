@@ -1,0 +1,79 @@
+name: PR Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  pull_request_target:
+    types: [closed]
+
+jobs:
+  label-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Label based on branch name
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const labels = [];
+            if (branch.startsWith('week')) labels.push('feature');
+            if (branch.startsWith('hotfix')) labels.push('bug');
+            if (branch.startsWith('docs')) labels.push('documentation');
+            if (branch.startsWith('chore')) labels.push('chore');
+            const weekMatch = branch.match(/^week(\d+)/);
+            if (weekMatch) labels.push(`week-${weekMatch[1]}`);
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: labels
+              });
+            }
+
+  mark-in-progress:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    permissions:
+      issues: write
+    steps:
+      - name: Add in-progress label to linked issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const matches = body.matchAll(/(?:closes|fixes|resolves)\s+#(\d+)/gi);
+            for (const match of matches) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: parseInt(match[1]),
+                labels: ['in progress']
+              });
+            }
+
+  cleanup-on-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    permissions:
+      issues: write
+    steps:
+      - name: Remove in-progress label on merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const matches = body.matchAll(/(?:closes|fixes|resolves)\s+#(\d+)/gi);
+            for (const match of matches) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: parseInt(match[1]),
+                  name: 'in progress'
+                });
+              } catch (e) { console.log('Label not found, skipping'); }
+            }
