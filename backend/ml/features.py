@@ -57,19 +57,20 @@ def get_velocity_features(user_id: str, occurred_at: datetime) -> dict:
     Count transactions in the last 1h and 24h using Redis sorted sets.
     Key: velocity:{user_id}  Score: unix timestamp  Member: transaction_id
     """
-    r = get_redis()
-    key = f"velocity:{user_id}"
-    now_ts = occurred_at.timestamp()
-    one_hour_ago = now_ts - 3600
-    one_day_ago = now_ts - 86400
-
-    velocity_1h = r.zcount(key, one_hour_ago, now_ts)
-    velocity_24h = r.zcount(key, one_day_ago, now_ts)
-
-    return {
-        "velocity_1h": int(velocity_1h),
-        "velocity_24h": int(velocity_24h),
-    }
+    try:
+        r = get_redis()
+        key = f"velocity:{user_id}"
+        now_ts = occurred_at.timestamp()
+        one_hour_ago = now_ts - 3600
+        one_day_ago = now_ts - 86400
+        velocity_1h = r.zcount(key, one_hour_ago, now_ts)
+        velocity_24h = r.zcount(key, one_day_ago, now_ts)
+        return {
+            "velocity_1h": int(velocity_1h),
+            "velocity_24h": int(velocity_24h),
+        }
+    except Exception:
+        return {"velocity_1h": 0, "velocity_24h": 0}
 
 
 def record_transaction_velocity(
