@@ -1,6 +1,5 @@
-import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from db.models import FraudAlert, FraudScore, Transaction, get_session
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,21 +17,25 @@ class ScoreRequest(BaseModel):
     transaction_id: uuid.UUID
     user_id: uuid.UUID
     merchant_id: uuid.UUID | None = None
-    amount_cents: int  # never float
+    amount_cents: int
     currency: str = "USD"
     country_code: str | None = None
     ip_address: str | None = None
     device_fingerprint: str | None = None
     occurred_at: datetime
+    # Optional location for geo-distance feature
+    lat: float | None = None
+    lon: float | None = None
 
 
 class ScoreResponse(BaseModel):
     transaction_id: uuid.UUID
     score: float
-    verdict: str  # "approved" | "flagged"
-    severity: str | None  # None if approved
+    verdict: str
+    severity: str | None
     latency_ms: int
     model_version: str
+    features: dict
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -55,9 +58,7 @@ def now_utc() -> datetime:
 
 @router.post("/score", response_model=ScoreResponse)
 def score(request: ScoreRequest, db: Session = Depends(get_session)):
-    start = time.perf_counter()
-
-    # 1. Check for duplicate (idempotency via transaction_id)
+    # 1. Check for duplicate
     existing = (
         db.query(FraudScore)
         .filter(FraudScore.transaction_id == request.transaction_id)
@@ -66,14 +67,19 @@ def score(request: ScoreRequest, db: Session = Depends(get_session)):
     if existing:
         raise HTTPException(status_code=409, detail="Transaction already scored.")
 
-    # 2. Run ML model
+    # 2. Run ML model with Redis features
     result = score_transaction(
+        user_id=str(request.user_id),
+        transaction_id=str(request.transaction_id),
         amount_cents=request.amount_cents,
         occurred_at=request.occurred_at,
+        lat=request.lat,
+        lon=request.lon,
+        update_redis=True,
     )
+
     score_value = result["score"]
     verdict = "flagged" if score_value >= result["threshold"] else "approved"
-    latency_ms = int((time.perf_counter() - start) * 1000)
 
     # 3. Persist transaction
     txn = Transaction(
@@ -98,15 +104,13 @@ def score(request: ScoreRequest, db: Session = Depends(get_session)):
         model_version=result["model_version"],
         feature_snapshot=result["features"],
         scored_at=now_utc(),
-        latency_ms=latency_ms,
+        latency_ms=result["latency_ms"],
     )
     db.add(fraud_score)
-    db.flush()  # get fraud_score.id before committing
+    db.flush()
 
     # 5. Create alert if flagged
     if verdict == "flagged":
-        from datetime import timedelta
-
         alert = FraudAlert(
             transaction_id=request.transaction_id,
             fraud_score_id=fraud_score.id,
@@ -123,6 +127,7 @@ def score(request: ScoreRequest, db: Session = Depends(get_session)):
         score=score_value,
         verdict=verdict,
         severity=map_severity(score_value) if verdict == "flagged" else None,
-        latency_ms=latency_ms,
+        latency_ms=result["latency_ms"],
         model_version=result["model_version"],
+        features=result["features"],
     )
