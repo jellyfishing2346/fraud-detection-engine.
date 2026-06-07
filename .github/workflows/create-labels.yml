@@ -1,0 +1,44 @@
+name: Create labels
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Create all project labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: 'feature',       color: '1D9E75', description: 'New functionality' },
+              { name: 'chore',         color: 'B0B0B0', description: 'Setup, config' },
+              { name: 'bug',           color: 'D85A30', description: 'Something broken' },
+              { name: 'documentation', color: '378ADD', description: 'Docs and writeups' },
+              { name: 'in progress',   color: 'F5C842', description: 'Being worked on' },
+              { name: 'blocked',       color: '791F1F', description: 'Waiting on something' },
+              { name: 'week-1',        color: 'EEEDFE', description: 'Week 1' },
+              { name: 'week-2',        color: 'EEEDFE', description: 'Week 2' },
+              { name: 'week-3',        color: 'EEEDFE', description: 'Week 3' },
+              { name: 'week-4',        color: 'EEEDFE', description: 'Week 4' },
+              { name: 'week-5',        color: 'EEEDFE', description: 'Week 5' },
+              { name: 'week-6',        color: 'EEEDFE', description: 'Week 6' },
+              { name: 'week-7',        color: 'EEEDFE', description: 'Week 7' },
+              { name: 'week-8',        color: 'EEEDFE', description: 'Week 8' },
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label
+                });
+                console.log(`Created: ${label.name}`);
+              } catch (e) {
+                if (e.status === 422) console.log(`Exists: ${label.name}`);
+                else throw e;
+              }
+            }
