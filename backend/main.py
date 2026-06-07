@@ -1,3 +1,5 @@
+import os
+import traceback
 from contextlib import asynccontextmanager
 
 from api.routes.alerts import router as alerts_router
@@ -5,6 +7,8 @@ from api.routes.score import router as score_router
 from db.models import create_tables
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from ml.predict import load_model
 
 load_dotenv()
@@ -17,8 +21,6 @@ async def lifespan(app: FastAPI):
     try:
         load_model()
     except Exception as e:
-        import traceback
-
         print(f"Warning: Model not loaded — {e}")
         traceback.print_exc()
     print("Ready.")
@@ -33,6 +35,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(score_router, prefix="/v1", tags=["Scoring"])
 app.include_router(alerts_router, prefix="/v1", tags=["Alerts"])
 
@@ -42,9 +52,9 @@ def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
-import os  # noqa: E402
-
-from fastapi.responses import FileResponse  # noqa: E402
+@app.head("/health")
+def health_head():
+    return {}
 
 
 @app.get("/dashboard")
