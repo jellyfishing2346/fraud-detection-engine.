@@ -14,7 +14,10 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     print("Starting up fraud detection engine...")
     create_tables()
-    load_model()
+    try:
+        load_model()
+    except Exception as e:
+        print(f"Warning: Model not loaded — {e}")
     print("Ready.")
     yield
     print("Shutting down...")
