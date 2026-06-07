@@ -20,7 +20,7 @@ D E T E C T I O N   E N G I N E
 [![Kafka](https://img.shields.io/badge/Kafka-KRaft_Mode-231F20?style=flat-square&logo=apache-kafka)](https://kafka.apache.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql)](https://postgresql.org)
 
-[**▶ Live Dashboard**](https://sparkling-brioche-94b5f2.netlify.app/dashboard.html) · [**API Docs**](https://fraud-detection-engine-ozjc.onrender.com/docs) · [**📖 Docs**](docs/) · [**🚀 Quickstart**](#quickstart) · [**🏗 Architecture**](#architecture)
+[**▶ Live Dashboard**](https://tranquil-lokum-370120.netlify.app/) · [**API Docs**](https://fraud-detection-engine-ozjc.onrender.com/docs) · [**📖 Docs**](docs/) · [**🚀 Quickstart**](#quickstart) · [**🏗 Architecture**](#architecture)
 
 </div>
 
