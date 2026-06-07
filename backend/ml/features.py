@@ -56,6 +56,7 @@ def get_velocity_features(user_id: str, occurred_at: datetime) -> dict:
     """
     Count transactions in the last 1h and 24h using Redis sorted sets.
     Key: velocity:{user_id}  Score: unix timestamp  Member: transaction_id
+    Returns zeros if Redis is unavailable.
     """
     try:
         r = get_redis()
@@ -82,12 +83,14 @@ def record_transaction_velocity(
     Add this transaction to the velocity sorted set.
     TTL is set to 25 hours so we never accumulate stale data.
     """
-    r = get_redis()
-    key = f"velocity:{user_id}"
-    ts = occurred_at.timestamp()
-
-    r.zadd(key, {transaction_id: ts})
-    r.expire(key, 90000)  # 25 hours in seconds
+    try:
+        r = get_redis()
+        key = f"velocity:{user_id}"
+        ts = occurred_at.timestamp()
+        r.zadd(key, {transaction_id: ts})
+        r.expire(key, 90000)  # 25 hours in seconds
+    except Exception:
+        pass
 
 
 # ─── Geo-distance features ────────────────────────────────────────────────────
@@ -101,31 +104,35 @@ def get_geo_features(
     """
     Compare current transaction location with user's last known location.
     Returns distance in km and a new_location flag.
+    Returns defaults if Redis is unavailable.
     """
-    r = get_redis()
-    key = f"location:{user_id}"
-
     if lat is None or lon is None:
         return {"geo_distance_km": 0.0, "is_new_location": 0}
 
-    stored = r.get(key)
-    if stored is None:
+    try:
+        r = get_redis()
+        key = f"location:{user_id}"
+        stored = r.get(key)
+        if stored is None:
+            return {"geo_distance_km": 0.0, "is_new_location": 1}
+        last = json.loads(stored)
+        distance = haversine_km(last["lat"], last["lon"], lat, lon)
+        return {
+            "geo_distance_km": round(distance, 2),
+            "is_new_location": 0,
+        }
+    except Exception:
         return {"geo_distance_km": 0.0, "is_new_location": 1}
-
-    last = json.loads(stored)
-    distance = haversine_km(last["lat"], last["lon"], lat, lon)
-
-    return {
-        "geo_distance_km": round(distance, 2),
-        "is_new_location": 0,
-    }
 
 
 def update_user_location(user_id: str, lat: float, lon: float) -> None:
     """Store the user's most recent transaction location. TTL: 7 days."""
-    r = get_redis()
-    key = f"location:{user_id}"
-    r.set(key, json.dumps({"lat": lat, "lon": lon}), ex=604800)
+    try:
+        r = get_redis()
+        key = f"location:{user_id}"
+        r.set(key, json.dumps({"lat": lat, "lon": lon}), ex=604800)
+    except Exception:
+        pass
 
 
 # ─── Main feature builder ─────────────────────────────────────────────────────
