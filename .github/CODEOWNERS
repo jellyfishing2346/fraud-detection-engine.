@@ -1,0 +1,10 @@
+# All files require review from the project maintainer.
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @faizankhan2003
+
+# Security-sensitive paths require explicit sign-off
+backend/api/auth*         @faizankhan2003
+backend/db/               @faizankhan2003
+.env.example              @faizankhan2003
+.github/workflows/        @faizankhan2003
