@@ -1,21 +1,55 @@
+import os
+import sys
+import traceback
 from contextlib import asynccontextmanager
+
+# Add backend directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 
 from api.routes.alerts import router as alerts_router
 from api.routes.score import router as score_router
 from db.models import create_tables
-from dotenv import find_dotenv, load_dotenv
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from ml.predict import load_model
 
-load_dotenv(find_dotenv())
+load_dotenv()
+
+# Set model paths for root directory deployment
+if not os.getenv("MODEL_PATH"):
+    os.environ["MODEL_PATH"] = os.path.join(
+        os.path.dirname(__file__), "backend/models/xgb_fraud_v1.joblib"
+    )
+if not os.getenv("SCALER_MEAN_PATH"):
+    os.environ["SCALER_MEAN_PATH"] = os.path.join(
+        os.path.dirname(__file__), "backend/models/scaler_mean.npy"
+    )
+if not os.getenv("SCALER_SCALE_PATH"):
+    os.environ["SCALER_SCALE_PATH"] = os.path.join(
+        os.path.dirname(__file__), "backend/models/scaler_scale.npy"
+    )
+if not os.getenv("FEATURES_PATH"):
+    os.environ["FEATURES_PATH"] = os.path.join(
+        os.path.dirname(__file__), "backend/models/feature_columns.txt"
+    )
+
+# Set DATABASE_URL for root directory deployment if not already set
+if not os.getenv("DATABASE_URL"):
+    # For local development, use the default from .env.example
+    pass  # Let the application use the .env file or default
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting up fraud detection engine...")
     create_tables()
-    load_model()
+    try:
+        load_model()
+    except Exception as e:
+        print(f"Warning: Model not loaded — {e}")
+        traceback.print_exc()
     print("Ready.")
     yield
     print("Shutting down...")
@@ -31,6 +65,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -44,13 +79,15 @@ def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
-import os  # noqa: E402
-
-from fastapi.responses import FileResponse  # noqa: E402
+@app.head("/health")
+def health_head():
+    return {}
 
 
 @app.get("/dashboard")
 def dashboard():
     return FileResponse(
-        os.path.join(os.path.dirname(__file__), "../frontend/dashboard.html")
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "frontend/dashboard.html"
+        )
     )
