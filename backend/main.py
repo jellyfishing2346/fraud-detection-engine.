@@ -13,6 +13,24 @@ from ml.predict import load_model
 
 load_dotenv()
 
+# Set model paths for backend directory deployment
+if not os.getenv("MODEL_PATH"):
+    os.environ["MODEL_PATH"] = os.path.join(
+        os.path.dirname(__file__), "models/xgb_fraud_v1.joblib"
+    )
+if not os.getenv("SCALER_MEAN_PATH"):
+    os.environ["SCALER_MEAN_PATH"] = os.path.join(
+        os.path.dirname(__file__), "models/scaler_mean.npy"
+    )
+if not os.getenv("SCALER_SCALE_PATH"):
+    os.environ["SCALER_SCALE_PATH"] = os.path.join(
+        os.path.dirname(__file__), "models/scaler_scale.npy"
+    )
+if not os.getenv("FEATURES_PATH"):
+    os.environ["FEATURES_PATH"] = os.path.join(
+        os.path.dirname(__file__), "models/feature_columns.txt"
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
