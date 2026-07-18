@@ -73,7 +73,7 @@ def train(data_path: str):
     # 1. Load data
     print("1. Loading dataset...")
     df = pd.read_csv(data_path)
-    print(f"   Rows: {len(df):,}  |  Columns: {df.shape[1]}")
+    print(f"   Rows: {len(df):,}  -  Columns: {df.shape[1]}")
     fraud_pct = df["Class"].mean() * 100
     print(f"   Fraud rate: {fraud_pct:.3f}%  ({df['Class'].sum():,} fraudulent)")
 
@@ -91,7 +91,7 @@ def train(data_path: str):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
     )
-    print(f"   Train: {len(X_train):,}  |  Test: {len(X_test):,}")
+    print(f"   Train: {len(X_train):,}  -  Test: {len(X_test):,}")
 
     # 4. Scale features
     print("\n4. Scaling features...")
