@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import UTC, datetime
+from functools import lru_cache
 
 from dotenv import load_dotenv
 from sqlalchemy import (
@@ -98,8 +99,13 @@ class ReviewerFeedback(Base):
     alert = relationship("FraudAlert", back_populates="feedback")
 
 
+@lru_cache(maxsize=1)
 def get_engine():
-    return create_engine(os.getenv("DATABASE_URL"))
+    """One engine (and connection pool) per process, reused by every request."""
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set.")
+    return create_engine(url, pool_pre_ping=True)
 
 
 def get_session():

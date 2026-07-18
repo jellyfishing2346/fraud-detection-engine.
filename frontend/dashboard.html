@@ -238,7 +238,10 @@
 <div id="toast" style="display:none" class="toast"></div>
 
 <script>
-  const API = 'https://fraud-detection-engine-ozjc.onrender.com/v1';
+  // Served by the backend itself (/dashboard): talk to that same server.
+  // Anywhere else (e.g. Netlify): use the hosted API.
+  const HOSTED_API = 'https://fraud-detection-engine-ozjc.onrender.com';
+  const API = (location.pathname.startsWith('/dashboard') ? location.origin : HOSTED_API) + '/v1';
   let alerts = [];
   let selectedAlert = null;
   let currentFilter = 'open';

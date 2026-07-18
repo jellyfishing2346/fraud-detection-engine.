@@ -4,7 +4,8 @@ from datetime import UTC, datetime, timedelta
 from db.models import FraudAlert, FraudScore, Transaction, get_session
 from fastapi import APIRouter, Depends, HTTPException
 from ml.predict import score_transaction
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -14,21 +15,25 @@ router = APIRouter()
 
 
 class ScoreRequest(BaseModel):
+    # Limits mirror the database columns, so bad input gets a 422 instead of
+    # failing on insert with a 500.
     transaction_id: uuid.UUID
     user_id: uuid.UUID
     merchant_id: uuid.UUID | None = None
-    amount_cents: int
-    currency: str = "USD"
-    country_code: str | None = None
-    ip_address: str | None = None
-    device_fingerprint: str | None = None
+    amount_cents: int = Field(ge=0)
+    currency: str = Field("USD", pattern=r"^[A-Z]{3}$")
+    country_code: str | None = Field(None, pattern=r"^[A-Z]{2}$")
+    ip_address: IPvAnyAddress | None = None
+    device_fingerprint: str | None = Field(None, max_length=512)
     occurred_at: datetime
     # Optional location for geo-distance feature
-    lat: float | None = None
-    lon: float | None = None
+    lat: float | None = Field(None, ge=-90, le=90)
+    lon: float | None = Field(None, ge=-180, le=180)
 
 
 class ScoreResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     transaction_id: uuid.UUID
     score: float
     verdict: str
@@ -89,7 +94,7 @@ def score(request: ScoreRequest, db: Session = Depends(get_session)):
         amount_cents=request.amount_cents,
         currency=request.currency,
         country_code=request.country_code,
-        ip_address=request.ip_address,
+        ip_address=str(request.ip_address) if request.ip_address else None,
         device_fingerprint=request.device_fingerprint,
         occurred_at=request.occurred_at,
         status=verdict,
@@ -107,7 +112,14 @@ def score(request: ScoreRequest, db: Session = Depends(get_session)):
         latency_ms=result["latency_ms"],
     )
     db.add(fraud_score)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # Another request scored the same transaction after our duplicate check.
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Transaction already scored."
+        ) from None
 
     # 5. Create alert if flagged
     if verdict == "flagged":
@@ -120,7 +132,15 @@ def score(request: ScoreRequest, db: Session = Depends(get_session)):
         )
         db.add(alert)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Another request scored the same transaction between our duplicate
+        # check and this insert.
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Transaction already scored."
+        ) from None
 
     return ScoreResponse(
         transaction_id=request.transaction_id,
