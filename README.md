@@ -78,22 +78,22 @@ Transaction arrives → Kafka → ML Scoring (2ms) → Approved ✓
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              KAFKA: transactions.raw                        │
-│         partitioned by user_id · retention: 7d             │
+│         partitioned by user_id · retention: 7d              │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              ML SCORING SERVICE (FastAPI)                   │
 │                                                             │
-│  ┌──────────────────┐  ┌──────────────────────────────┐    │
-│  │  Redis Cache     │  │     XGBoost Model            │    │
-│  │  velocity_1h ────┼─►│  score = f(                  │    │
-│  │  velocity_24h    │  │    amount_log,                │    │
-│  │  geo_distance_km │  │    hour_of_day,               │    │
-│  │  is_new_location │  │    velocity_1h,               │    │
-│  └──────────────────┘  │    geo_distance_km ...        │    │
-│                        └──────────────────────────────┘    │
-└──────────┬─────────────────────────────┬───────────────────┘
+│  ┌──────────────────┐  ┌──────────────────────────────┐     │
+│  │  Redis Cache     │  │     XGBoost Model            │     │
+│  │  velocity_1h ────┼─►│  score = f(                  │     │
+│  │  velocity_24h    │  │    amount_log,               │     │
+│  │  geo_distance_km │  │    hour_of_day,              │     │
+│  │  is_new_location │  │    velocity_1h,              │     │
+│  └──────────────────┘  │    geo_distance_km ...       │     │
+│                        └──────────────────────────────┘     │
+└──────────┬─────────────────────────────┬────────────────────┘
            │ score < 0.4                 │ score ≥ 0.4
            ▼                             ▼
 ┌──────────────────┐        ┌────────────────────────────┐
