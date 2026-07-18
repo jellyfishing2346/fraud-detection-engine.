@@ -6,9 +6,9 @@ from api.routes.alerts import router as alerts_router
 from api.routes.score import router as score_router
 from db.models import create_tables
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from ml.predict import load_model
 
 load_dotenv()
@@ -56,13 +56,23 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(score_router, prefix="/v1", tags=["Scoring"])
 app.include_router(alerts_router, prefix="/v1", tags=["Alerts"])
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler to ensure CORS headers on errors."""
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error", "message": str(exc)},
+    )
 
 
 @app.get("/health")
