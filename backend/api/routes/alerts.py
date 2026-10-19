@@ -1,9 +1,10 @@
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from db.models import FraudAlert, FraudScore, ReviewerFeedback, Transaction, get_session
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -45,8 +46,8 @@ class AlertListResponse(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    verdict: str  # "confirmed" | "false_positive"
-    notes: str | None = None
+    verdict: Literal["confirmed", "false_positive"]
+    notes: str | None = Field(None, max_length=2000)
 
 
 class ReviewResponse(BaseModel):
@@ -61,9 +62,9 @@ class ReviewResponse(BaseModel):
 
 @router.get("/alerts", response_model=AlertListResponse)
 def list_alerts(
-    state: str | None = Query(None, description="open | in_review | closed"),
-    severity: str | None = Query(None, description="low | medium | high"),
-    limit: int = Query(20, le=100),
+    state: Literal["open", "in_review", "closed"] | None = Query(None),
+    severity: Literal["low", "medium", "high"] | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
     cursor: str | None = Query(None, description="created_at cursor for pagination"),
     db: Session = Depends(get_session),
 ):
@@ -155,17 +156,14 @@ def review_alert(
     body: ReviewRequest,
     db: Session = Depends(get_session),
 ):
-    alert = db.query(FraudAlert).filter(FraudAlert.id == alert_id).first()
+    # Lock the alert row so two reviewers can't both close it at once.
+    alert = (
+        db.query(FraudAlert).filter(FraudAlert.id == alert_id).with_for_update().first()
+    )
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found.")
     if alert.state == "closed":
         raise HTTPException(status_code=409, detail="Alert already closed.")
-
-    if body.verdict not in ("confirmed", "false_positive"):
-        raise HTTPException(
-            status_code=422,
-            detail="verdict must be 'confirmed' or 'false_positive'.",
-        )
 
     # Record reviewer feedback
     reviewed_at = datetime.now(UTC)

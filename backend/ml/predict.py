@@ -16,10 +16,19 @@ from ml.features import build_features, post_score_update
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-MODEL_PATH = os.getenv("MODEL_PATH", "models/xgb_fraud_v1.joblib")
-SCALER_MEAN_PATH = os.getenv("SCALER_MEAN_PATH", "models/scaler_mean.npy")
-SCALER_SCALE_PATH = os.getenv("SCALER_SCALE_PATH", "models/scaler_scale.npy")
-FEATURES_PATH = os.getenv("FEATURES_PATH", "models/feature_columns.txt")
+_MODELS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models"
+)
+MODEL_PATH = os.getenv("MODEL_PATH", os.path.join(_MODELS_DIR, "xgb_fraud_v1.joblib"))
+SCALER_MEAN_PATH = os.getenv(
+    "SCALER_MEAN_PATH", os.path.join(_MODELS_DIR, "scaler_mean.npy")
+)
+SCALER_SCALE_PATH = os.getenv(
+    "SCALER_SCALE_PATH", os.path.join(_MODELS_DIR, "scaler_scale.npy")
+)
+FEATURES_PATH = os.getenv(
+    "FEATURES_PATH", os.path.join(_MODELS_DIR, "feature_columns.txt")
+)
 THRESHOLD = float(os.getenv("FRAUD_SCORE_THRESHOLD", "0.4"))
 MODEL_VERSION = os.getenv("MODEL_VERSION", "xgb-v1.0.0")
 

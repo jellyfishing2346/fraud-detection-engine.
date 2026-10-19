@@ -238,7 +238,12 @@
 <div id="toast" style="display:none" class="toast"></div>
 
 <script>
-  const API = 'https://your-ngrok-url.ngrok-free.app/v1';
+  // Served by the backend's own /dashboard route: talk to that same server.
+  // Anywhere else (e.g. Netlify, where the file is /dashboard.html): use the
+  // hosted API.
+  const HOSTED_API = 'https://fraud-detection-engine-ozjc.onrender.com';
+  const servedByBackend = /^\/dashboard\/?$/.test(location.pathname);
+  const API = (servedByBackend ? location.origin : HOSTED_API) + '/v1';
   let alerts = [];
   let selectedAlert = null;
   let currentFilter = 'open';
