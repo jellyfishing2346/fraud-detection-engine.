@@ -263,3 +263,49 @@ def test_stats_reflect_the_whole_queue(client, session, monkeypatch):
 
 def test_stats_route_is_not_treated_as_an_alert_id(client):
     assert client.get("/v1/alerts/stats").status_code == 200
+
+
+def test_risky_transaction_is_flagged_by_the_real_model(client):
+    """No pinned threshold: the deployed model itself must flag this."""
+    res = score(client, amount_cents=300_000, occurred_at="2026-06-06T03:00:00Z")
+    assert res.json()["verdict"] == "flagged"
+    assert client.get("/v1/alerts").json()["total"] == 1
+
+
+def test_ordinary_transaction_is_approved_by_the_real_model(client):
+    res = score(client, amount_cents=4_500, occurred_at="2026-06-06T13:00:00Z")
+    assert res.json()["verdict"] == "approved"
+    assert client.get("/v1/alerts").json()["total"] == 0
+
+
+def test_seed_scores_everything_with_the_real_model(client, session):
+    import sys
+
+    from db.models import FraudAlert, FraudScore, ReviewerFeedback, Transaction
+    from ml import features
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+    import seed as seed_script
+
+    before = features._redis_client
+    counts = seed_script.seed(users=12)
+    assert features._redis_client is before  # stand-in Redis doesn't leak
+
+    assert session.query(Transaction).count() == counts["transactions"] > 0
+    scores = session.query(FraudScore).all()
+    assert {s.model_version for s in scores} == {"xgb-v2.0.0"}
+
+    alerts = session.query(FraudAlert).all()
+    assert len(alerts) == counts["alerts"]
+    flagged = {s.id for s in scores if s.score >= s.threshold_used}
+    assert {a.fraud_score_id for a in alerts} == flagged  # alerts only where flagged
+
+    closed = [a for a in alerts if a.state == "closed"]
+    assert session.query(ReviewerFeedback).count() == len(closed)
+
+    stats = client.get("/v1/alerts/stats").json()
+    assert stats["open"] == counts["open"]
+
+    # --reset replaces instead of adding
+    again = seed_script.seed(users=12, do_reset=True)
+    assert session.query(Transaction).count() == again["transactions"]
