@@ -1,0 +1,12 @@
+# Netlify only serves the static reviewer dashboard in frontend/.
+# Using it as the base directory keeps Netlify from reading the repo's
+# runtime.txt (which is for Railway) and trying to install Python.
+[build]
+  base = "frontend"
+  publish = "."
+
+# Serve the dashboard at the site root
+[[redirects]]
+  from = "/"
+  to = "/dashboard.html"
+  status = 200
