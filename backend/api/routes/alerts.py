@@ -5,6 +5,7 @@ from typing import Literal
 from db.models import FraudAlert, FraudScore, ReviewerFeedback, Transaction, get_session
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -120,6 +121,53 @@ def list_alerts(
         ],
         total=total,
         next_cursor=next_cursor,
+    )
+
+
+# ─── GET /alerts/stats ────────────────────────────────────────────────────────
+
+
+class AlertStats(BaseModel):
+    open: int
+    in_review: int
+    escalated: int
+    closed_today: int
+    reviewed: int
+    false_positive_rate: float | None
+
+
+# Declared before /alerts/{alert_id} so "stats" isn't parsed as an alert ID.
+@router.get("/alerts/stats", response_model=AlertStats)
+def alert_stats(db: Session = Depends(get_session)):
+    """Queue-wide counts for the dashboard, independent of any list filter."""
+    by_state = dict(
+        db.query(FraudAlert.state, func.count()).group_by(FraudAlert.state).all()
+    )
+    escalated = (
+        db.query(func.count())
+        .select_from(FraudAlert)
+        .filter(FraudAlert.escalated.is_(True), FraudAlert.state != "closed")
+        .scalar()
+    )
+    start_of_day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    closed_today = (
+        db.query(func.count())
+        .select_from(ReviewerFeedback)
+        .filter(ReviewerFeedback.reviewed_at >= start_of_day)
+        .scalar()
+    )
+    reviewed, false_positives = db.query(
+        func.count(),
+        func.count().filter(ReviewerFeedback.verdict == "false_positive"),
+    ).one()
+
+    return AlertStats(
+        open=by_state.get("open", 0),
+        in_review=by_state.get("in_review", 0),
+        escalated=escalated,
+        closed_today=closed_today,
+        reviewed=reviewed,
+        false_positive_rate=(false_positives / reviewed) if reviewed else None,
     )
 
 

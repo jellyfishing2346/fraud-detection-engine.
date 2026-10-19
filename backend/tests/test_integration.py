@@ -222,3 +222,44 @@ def test_alert_list_includes_amount(client, monkeypatch):
     alert = client.get("/v1/alerts").json()["alerts"][0]
     assert alert["amount_cents"] == 432_10
     assert alert["currency"] == "EUR"
+
+
+def test_stats_reflect_the_whole_queue(client, session, monkeypatch):
+    from db.models import FraudAlert
+
+    assert client.get("/v1/alerts/stats").json() == {
+        "open": 0,
+        "in_review": 0,
+        "escalated": 0,
+        "closed_today": 0,
+        "reviewed": 0,
+        "false_positive_rate": None,
+    }
+
+    always(monkeypatch, "flagged")
+    for _ in range(4):
+        score(client)
+    ids = [a["alert_id"] for a in client.get("/v1/alerts").json()["alerts"]]
+
+    # One escalated alert still open, one escalated alert that gets closed
+    for alert_id in ids[:2]:
+        session.get(FraudAlert, uuid.UUID(alert_id)).escalated = True
+    session.commit()
+
+    client.patch(f"/v1/alerts/{ids[1]}/review", json={"verdict": "confirmed"})
+    client.patch(f"/v1/alerts/{ids[2]}/review", json={"verdict": "false_positive"})
+
+    stats = client.get("/v1/alerts/stats").json()
+    assert stats["open"] == 2
+    assert stats["escalated"] == 1  # closed alerts no longer count
+    assert stats["closed_today"] == 2
+    assert stats["reviewed"] == 2
+    assert stats["false_positive_rate"] == 0.5
+
+    # Independent of list filters and page size
+    assert client.get("/v1/alerts?state=closed&limit=1").status_code == 200
+    assert client.get("/v1/alerts/stats").json() == stats
+
+
+def test_stats_route_is_not_treated_as_an_alert_id(client):
+    assert client.get("/v1/alerts/stats").status_code == 200

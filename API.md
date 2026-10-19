@@ -14,6 +14,7 @@ Interactive docs: `http://localhost:8000/docs` (Swagger UI)
 | `GET` | `/dashboard` | Reviewer dashboard (HTML) |
 | `POST` | `/v1/score` | Score a transaction |
 | `GET` | `/v1/alerts` | List alerts |
+| `GET` | `/v1/alerts/stats` | Queue-wide counts for the dashboard |
 | `GET` | `/v1/alerts/{id}` | Get alert detail |
 | `PATCH` | `/v1/alerts/{id}/review` | Submit reviewer verdict |
 
@@ -186,6 +187,32 @@ GET /v1/alerts?state=open&limit=20&cursor=2026-06-07T01:15:00Z
 # Get all high-severity open alerts
 curl "http://localhost:8000/v1/alerts?state=open&severity=high&limit=50"
 ```
+
+---
+
+## GET /v1/alerts/stats
+
+Queue-wide counts for the reviewer dashboard. Unlike the list endpoint, these don't depend on filters or page size.
+
+### Response `200`
+```json
+{
+  "open": 58,
+  "in_review": 0,
+  "escalated": 3,
+  "closed_today": 4,
+  "reviewed": 22,
+  "false_positive_rate": 0.3182
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `open`, `in_review` | Alerts currently in that state |
+| `escalated` | Escalated alerts that aren't closed yet |
+| `closed_today` | Reviews submitted since midnight UTC |
+| `reviewed` | All reviews ever submitted |
+| `false_positive_rate` | Share of reviews with verdict `false_positive`; `null` before the first review |
 
 ---
 
