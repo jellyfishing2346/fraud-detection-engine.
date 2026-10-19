@@ -61,14 +61,14 @@ Scores a transaction in real time. Writes to `transactions` and `fraud_scores` t
 | `transaction_id` | UUID | ✅ | Unique transaction identifier |
 | `user_id` | UUID | ✅ | User performing the transaction |
 | `merchant_id` | UUID | ❌ | Merchant identifier |
-| `amount_cents` | integer | ✅ | Amount in cents (never float) |
-| `currency` | string | ❌ | ISO 4217 code. Default: `USD` |
-| `country_code` | string | ❌ | ISO 3166 2-letter code |
-| `ip_address` | string | ❌ | Client IP address |
-| `device_fingerprint` | string | ❌ | Hashed device info |
+| `amount_cents` | integer | ✅ | Amount in cents (never float), `>= 0` |
+| `currency` | string | ❌ | ISO 4217 code, 3 uppercase letters. Default: `USD` |
+| `country_code` | string | ❌ | ISO 3166 code, 2 uppercase letters |
+| `ip_address` | string | ❌ | Client IPv4 or IPv6 address |
+| `device_fingerprint` | string | ❌ | Hashed device info, max 512 characters |
 | `occurred_at` | ISO 8601 | ✅ | When the transaction occurred |
-| `lat` | float | ❌ | Latitude for geo-distance feature |
-| `lon` | float | ❌ | Longitude for geo-distance feature |
+| `lat` | float | ❌ | Latitude for geo-distance feature, -90 to 90 |
+| `lon` | float | ❌ | Longitude for geo-distance feature, -180 to 180 |
 
 ### Response `200` — approved
 ```json
@@ -115,9 +115,9 @@ Scores a transaction in real time. Writes to `transactions` and `fraud_scores` t
 ### Error responses
 | Code | Condition |
 |---|---|
-| `409 Conflict` | Transaction ID already scored |
-| `422 Unprocessable Entity` | Missing or invalid fields |
-| `500 Internal Server Error` | Model not loaded |
+| `409 Conflict` | Transaction ID already scored (including two simultaneous requests for the same ID) |
+| `422 Unprocessable Entity` | Missing or invalid fields, including values outside the limits above |
+| `500 Internal Server Error` | Model not loaded. The body is always `{"detail": "Internal server error"}`; details go to the server log |
 
 ### Example (curl)
 ```bash
@@ -143,7 +143,7 @@ Returns paginated list of fraud alerts. Supports filtering by state and severity
 |---|---|---|---|
 | `state` | string | (all) | `open` \| `in_review` \| `closed` |
 | `severity` | string | (all) | `low` \| `medium` \| `high` |
-| `limit` | integer | 20 | Max results (max: 100) |
+| `limit` | integer | 20 | Max results, 1 to 100 |
 | `cursor` | string | (none) | ISO timestamp for pagination |
 
 ### Response `200`
@@ -165,6 +165,8 @@ Returns paginated list of fraud alerts. Supports filtering by state and severity
   "next_cursor": "2026-06-07T01:15:00Z"
 }
 ```
+
+Unknown `state` or `severity` values, or a `limit` outside 1 to 100, return `422`. A malformed `cursor` returns `400`.
 
 ### Pagination
 Use cursor-based pagination for consistent results under concurrent writes:
@@ -240,7 +242,7 @@ Submit a reviewer verdict. Closes the alert and records feedback for retraining.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `verdict` | string | ✅ | `confirmed` \| `false_positive` |
-| `notes` | string | ❌ | Analyst notes |
+| `notes` | string | ❌ | Analyst notes, max 2000 characters |
 
 ### Response `200`
 ```json
@@ -257,7 +259,7 @@ Submit a reviewer verdict. Closes the alert and records feedback for retraining.
 |---|---|
 | `404 Not Found` | Alert ID does not exist |
 | `409 Conflict` | Alert is already closed |
-| `422 Unprocessable Entity` | Invalid verdict value |
+| `422 Unprocessable Entity` | Invalid verdict value, or notes over 2000 characters |
 
 ### Example
 ```bash

@@ -1,3 +1,4 @@
+import logging
 import os
 import traceback
 from contextlib import asynccontextmanager
@@ -12,24 +13,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from ml.predict import load_model
 
 load_dotenv()
-
-# Set model paths for backend directory deployment
-if not os.getenv("MODEL_PATH"):
-    os.environ["MODEL_PATH"] = os.path.join(
-        os.path.dirname(__file__), "models/xgb_fraud_v1.joblib"
-    )
-if not os.getenv("SCALER_MEAN_PATH"):
-    os.environ["SCALER_MEAN_PATH"] = os.path.join(
-        os.path.dirname(__file__), "models/scaler_mean.npy"
-    )
-if not os.getenv("SCALER_SCALE_PATH"):
-    os.environ["SCALER_SCALE_PATH"] = os.path.join(
-        os.path.dirname(__file__), "models/scaler_scale.npy"
-    )
-if not os.getenv("FEATURES_PATH"):
-    os.environ["FEATURES_PATH"] = os.path.join(
-        os.path.dirname(__file__), "models/feature_columns.txt"
-    )
 
 
 @asynccontextmanager
@@ -68,10 +51,17 @@ app.include_router(alerts_router, prefix="/v1", tags=["Alerts"])
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Global exception handler to ensure CORS headers on errors."""
+    """
+    Return a generic 500 (keeping CORS headers on errors). Details are logged
+    server-side only: exception text can contain SQL, file paths or
+    connection strings.
+    """
+    logging.getLogger("fraud_engine").exception(
+        "Unhandled error on %s %s", request.method, request.url.path
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error", "message": str(exc)},
+        content={"detail": "Internal server error"},
     )
 
 
