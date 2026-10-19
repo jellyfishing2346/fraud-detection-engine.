@@ -15,12 +15,12 @@ D E T E C T I O N   E N G I N E
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
-[![XGBoost](https://img.shields.io/badge/XGBoost-Recall_89%25-orange?style=flat-square)](https://xgboost.readthedocs.io)
+[![XGBoost](https://img.shields.io/badge/XGBoost-v2-orange?style=flat-square)](ML_MODEL.md)
 [![Redis](https://img.shields.io/badge/Redis-Velocity_Features-red?style=flat-square&logo=redis)](https://redis.io)
 [![Kafka](https://img.shields.io/badge/Kafka-KRaft_Mode-231F20?style=flat-square&logo=apache-kafka)](https://kafka.apache.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql)](https://postgresql.org)
 
-[**▶ Live Dashboard**](https://tranquil-lokum-370120.netlify.app/) · [**API Docs**](https://fraud-detection-engine-ozjc.onrender.com/docs) · [**📖 Docs**](docs/) · [**🚀 Quickstart**](#quickstart) · [**🏗 Architecture**](#architecture)
+[**▶ Live Dashboard**](https://superlative-sorbet-ea6ee1.netlify.app) · [**API Docs**](https://fraud-detection-engine-ozjc.onrender.com/docs) · [**📖 Docs**](#documentation) · [**🚀 Quickstart**](#quickstart) · [**🏗 Architecture**](#architecture)
 
 </div>
 
@@ -43,14 +43,14 @@ Transaction arrives → Kafka → ML Scoring (2ms) → Approved ✓
 
 | | URL |
 |---|---|
-| 🖥 **Reviewer Dashboard** | https://sparkling-brioche-94b5f2.netlify.app/dashboard.html |
+| 🖥 **Reviewer Dashboard** | https://superlative-sorbet-ea6ee1.netlify.app |
 | 📡 **API** | https://fraud-detection-engine-ozjc.onrender.com |
 | 📖 **API Docs** | https://fraud-detection-engine-ozjc.onrender.com/docs |
 | ❤️ **Health Check** | https://fraud-detection-engine-ozjc.onrender.com/health |
 
 > **Note:** API is hosted on Render free tier — first request after inactivity may take ~50 seconds to wake up.
 
-![Fraud Detection Engine Demo](<Fraud Review Console Walkthrough.gif>)
+![Fraud Detection Engine Demo](assets/demo.gif)
 
 ---
 
@@ -104,7 +104,7 @@ Transaction arrives → Kafka → ML Scoring (2ms) → Approved ✓
                                            ▼
                              ┌──────────────────────────────────────┐
                              │   REVIEWER DASHBOARD                 │
-                             │   sparkling-brioche-94b5f2.netlify   │
+                             │   superlative-sorbet-ea6ee1.netlify  │
                              └──────────────────────────────────────┘
 ```
 
@@ -144,20 +144,24 @@ cd infra && docker compose up -d
 docker compose ps   # wait until postgres and redis show (healthy)
 ```
 
-### 3. Train the model
+### 3. Train the model (optional)
 
-Download [`creditcard.csv`](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) → place in `backend/notebooks/`
+The trained model ships in `backend/models/`. To retrain it (a few seconds, deterministic):
 
 ```bash
 cd backend
-python3.12 ml/train.py --data notebooks/creditcard.csv
+python3.12 -m ml.train_v2
 ```
+
+The model uses only features the API computes at request time, trained on synthetic data. See [ML_MODEL.md](ML_MODEL.md) for why, and for the legacy Kaggle-trained v1.
 
 ### 4. Seed test data
 
 ```bash
-python3.12 scripts/seed.py
-# Writes 1000 transactions and ~80 fraud alerts
+python3.12 scripts/seed.py          # add demo data
+python3.12 scripts/seed.py --reset  # replace ALL existing transactions and alerts
+# Simulates 30 days of activity for 60 users (~3,700 transactions), scored by the
+# real model; ~160 get flagged, older alerts closed with reviewer verdicts
 ```
 
 ### 5. Start the API
@@ -173,7 +177,7 @@ python3.12 -m uvicorn main:app --reload
 |---|---|
 | http://localhost:8000/dashboard | Local reviewer dashboard |
 | http://localhost:8000/docs | Local API docs |
-| https://sparkling-brioche-94b5f2.netlify.app/dashboard.html | Live reviewer dashboard |
+| https://superlative-sorbet-ea6ee1.netlify.app | Live reviewer dashboard |
 | https://fraud-detection-engine-ozjc.onrender.com/docs | Live API docs |
 
 ---
@@ -182,13 +186,12 @@ python3.12 -m uvicorn main:app --reload
 
 | Document | Description |
 |---|---|
-| [📐 Architecture](docs/ARCHITECTURE.md) | System design, data flow, component decisions |
-| [🤖 ML Model](docs/ML_MODEL.md) | Feature engineering, training, threshold tuning |
-| [🗄 Database Schema](docs/DATABASE.md) | Table design, relationships, indexing |
-| [📡 API Reference](docs/API.md) | All endpoints with request/response examples |
-| [📨 Kafka Pipeline](docs/KAFKA.md) | Topics, consumers, idempotency, failure handling |
-| [🔧 Development Guide](docs/DEVELOPMENT.md) | Local setup, linting, testing |
-| [🧠 Technical Decisions](docs/DECISIONS.md) | Why each technology was chosen |
+| [📐 Architecture](ARCHITECTURE.md) | System design, data flow, component decisions |
+| [🤖 ML Model](ML_MODEL.md) | Feature engineering, training, threshold tuning |
+| [🗄 Database Schema](DATABASE.md) | Table design, relationships, indexing |
+| [📡 API Reference](API.md) | All endpoints with request/response examples |
+| [📨 Kafka Pipeline](KAFKA.md) | Topics, consumers, idempotency, failure handling |
+| [🔧 Development Guide](DEVELOPMENT.md) | Local setup, linting, testing |
 
 ---
 
