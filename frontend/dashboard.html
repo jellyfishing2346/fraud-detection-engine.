@@ -305,7 +305,7 @@
       const slaMs = new Date(a.sla_deadline) - new Date();
       const slaPct = Math.max(0, Math.min(100, (slaMs / (4 * 3600 * 1000)) * 100));
       const slaColor = slaPct < 25 ? '#ef4444' : slaPct < 50 ? '#eab308' : '#22c55e';
-      const amount = a.amount_cents ? `$${(a.amount_cents/100).toLocaleString('en-US', {minimumFractionDigits:2})}` : '—';
+      const amount = formatMoney(a.amount_cents, a.currency);
       return `
         <div class="alert-item ${selectedAlert?.alert_id === a.alert_id ? 'selected' : ''} ${a.escalated ? 'escalated' : ''}"
              onclick="selectAlert('${a.alert_id}')">
@@ -346,9 +346,7 @@
 
   function renderDetail(a) {
     const isFlagged = a.score >= 0.4;
-    const amount = a.amount_cents
-      ? `$${(a.amount_cents/100).toLocaleString('en-US', {minimumFractionDigits:2})}`
-      : '—';
+    const amount = formatMoney(a.amount_cents, a.currency);
     const slaMs = new Date(a.sla_deadline) - new Date();
     const slaHrs = Math.floor(slaMs / 3600000);
     const slaMins = Math.floor((slaMs % 3600000) / 60000);
@@ -491,6 +489,16 @@
   }
 
   // ── Helpers ───────────────────────────────────────────────────
+
+  function formatMoney(cents, currency) {
+    if (cents === null || cents === undefined) return '—';
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' })
+        .format(cents / 100);
+    } catch {
+      return `${(cents / 100).toFixed(2)} ${currency || ''}`.trim();
+    }
+  }
 
   function timeAgo(iso) {
     const diff = Date.now() - new Date(iso);

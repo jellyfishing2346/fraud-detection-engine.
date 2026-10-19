@@ -214,3 +214,11 @@ def test_requests_share_one_connection_pool(client, monkeypatch):
             )
         ).scalar()
     assert count <= 6
+
+
+def test_alert_list_includes_amount(client, monkeypatch):
+    always(monkeypatch, "flagged")
+    score(client, amount_cents=432_10, currency="EUR")
+    alert = client.get("/v1/alerts").json()["alerts"][0]
+    assert alert["amount_cents"] == 432_10
+    assert alert["currency"] == "EUR"

@@ -153,6 +153,8 @@ Returns paginated list of fraud alerts. Supports filtering by state and severity
     {
       "alert_id":       "abba1e31-...",
       "transaction_id": "ff000000-...",
+      "amount_cents":   950000,
+      "currency":       "USD",
       "score":          0.8231,
       "severity":       "high",
       "state":          "open",

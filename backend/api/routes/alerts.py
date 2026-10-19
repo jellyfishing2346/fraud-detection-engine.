@@ -16,6 +16,8 @@ router = APIRouter()
 class AlertSummary(BaseModel):
     alert_id: uuid.UUID
     transaction_id: uuid.UUID
+    amount_cents: int
+    currency: str
     score: float
     severity: str
     state: str
@@ -68,7 +70,17 @@ def list_alerts(
     cursor: str | None = Query(None, description="created_at cursor for pagination"),
     db: Session = Depends(get_session),
 ):
-    query = db.query(FraudAlert)
+    # One query for alerts plus the score and amount shown in the list
+    query = (
+        db.query(
+            FraudAlert,
+            FraudScore.score,
+            Transaction.amount_cents,
+            Transaction.currency,
+        )
+        .join(FraudScore, FraudAlert.fraud_score_id == FraudScore.id)
+        .join(Transaction, FraudAlert.transaction_id == Transaction.id)
+    )
 
     if state:
         query = query.filter(FraudAlert.state == state)
@@ -84,25 +96,27 @@ def list_alerts(
             ) from None
 
     total = query.count()
-    alerts = query.order_by(FraudAlert.created_at.desc()).limit(limit).all()
+    rows = query.order_by(FraudAlert.created_at.desc()).limit(limit).all()
 
     next_cursor = None
-    if len(alerts) == limit:
-        next_cursor = alerts[-1].created_at.isoformat()
+    if len(rows) == limit:
+        next_cursor = rows[-1][0].created_at.isoformat()
 
     return AlertListResponse(
         alerts=[
             AlertSummary(
                 alert_id=a.id,
                 transaction_id=a.transaction_id,
-                score=float(a.fraud_score.score) if a.fraud_score else 0.0,
+                amount_cents=amount_cents,
+                currency=currency,
+                score=float(score),
                 severity=a.severity,
                 state=a.state,
                 sla_deadline=a.sla_deadline,
                 escalated=a.escalated,
                 created_at=a.created_at,
             )
-            for a in alerts
+            for a, score, amount_cents, currency in rows
         ],
         total=total,
         next_cursor=next_cursor,
