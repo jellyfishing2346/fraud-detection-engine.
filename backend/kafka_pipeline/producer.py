@@ -15,7 +15,7 @@ import os
 import random
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -43,6 +43,12 @@ LOCATIONS = [
 ]
 
 
+def _at_hour(now: datetime, hour: int) -> datetime:
+    """The most recent time at this hour that isn't in the future."""
+    at = now.replace(hour=hour)
+    return at - timedelta(days=1) if at > now else at
+
+
 def make_transaction(user_id: uuid.UUID, high_risk: bool = False) -> dict:
     """Generate a realistic transaction payload."""
     now = datetime.now(UTC)
@@ -50,12 +56,12 @@ def make_transaction(user_id: uuid.UUID, high_risk: bool = False) -> dict:
     if high_risk:
         # High risk: large amount, night time, random location
         amount_cents = random.randint(500_00, 10_000_00)
-        occurred_at = now.replace(hour=random.choice([1, 2, 3, 4]))
+        occurred_at = _at_hour(now, random.choice([1, 2, 3, 4]))
         lat, lon = random.choice(LOCATIONS)
     else:
         # Normal: moderate amount, business hours
         amount_cents = random.randint(10_00, 500_00)
-        occurred_at = now.replace(hour=random.randint(9, 18))
+        occurred_at = _at_hour(now, random.randint(9, 18))
         lat, lon = random.choice(LOCATIONS)
 
     return {
