@@ -135,3 +135,44 @@ def test_mismatched_artifacts_fail_at_startup(monkeypatch, tmp_path):
     monkeypatch.undo()
     with contextlib.redirect_stdout(io.StringIO()):
         predict.load_model()
+
+
+def test_train_v2_command_line_writes_artifacts(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["train_v2", "--rows", "5000", "--seed", "3", "--out", str(tmp_path)],
+    )
+    with contextlib.redirect_stdout(io.StringIO()) as out:
+        train_v2.main()
+    assert "roc_auc" in out.getvalue()
+    assert (tmp_path / "xgb_fraud_v2.joblib").exists()
+
+
+# ─── Legacy v1 trainer (Kaggle format) ────────────────────────────────────────
+
+
+def test_legacy_v1_trainer_runs_on_kaggle_shaped_data(tmp_path, monkeypatch):
+    import pandas as pd
+    from ml import train as train_v1
+
+    rng = np.random.default_rng(0)
+    n = 800
+    fraud = (rng.random(n) < 0.1).astype(int)
+    df = pd.DataFrame(
+        {f"V{i}": rng.normal(size=n) + fraud * (i % 3) for i in range(1, 29)}
+    )
+    df.insert(0, "Time", rng.integers(0, 172_800, n))
+    df["Amount"] = rng.lognormal(3, 1, n)
+    df["Class"] = fraud
+    data = tmp_path / "creditcard.csv"
+    df.to_csv(data, index=False)
+
+    # Write into tmp_path, never over the committed v1 artifacts
+    monkeypatch.setattr(train_v1, "MODEL_DIR", str(tmp_path / "models"))
+    with contextlib.redirect_stdout(io.StringIO()):
+        train_v1.train(str(data))
+
+    saved = {p.name for p in (tmp_path / "models").iterdir()}
+    assert {"xgb_fraud_v1.joblib", "scaler_v1.joblib", "feature_columns.txt"} <= saved
+    features = (tmp_path / "models" / "feature_columns.txt").read_text().split()
+    assert "V1" in features and "amount_log" in features

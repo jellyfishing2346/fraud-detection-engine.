@@ -6,7 +6,7 @@ sqlalchemy==2.0.30
 psycopg2-binary==2.9.9
 alembic==1.13.1
 redis==5.0.4
-kafka-python==2.0.2
+kafka-python==2.0.3
 scikit-learn==1.7.1
 xgboost==2.0.3
 imbalanced-learn==0.14.1
