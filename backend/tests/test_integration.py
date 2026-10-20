@@ -214,3 +214,98 @@ def test_requests_share_one_connection_pool(client, monkeypatch):
             )
         ).scalar()
     assert count <= 6
+
+
+def test_alert_list_includes_amount(client, monkeypatch):
+    always(monkeypatch, "flagged")
+    score(client, amount_cents=432_10, currency="EUR")
+    alert = client.get("/v1/alerts").json()["alerts"][0]
+    assert alert["amount_cents"] == 432_10
+    assert alert["currency"] == "EUR"
+
+
+def test_stats_reflect_the_whole_queue(client, session, monkeypatch):
+    from db.models import FraudAlert
+
+    assert client.get("/v1/alerts/stats").json() == {
+        "open": 0,
+        "in_review": 0,
+        "escalated": 0,
+        "closed_today": 0,
+        "reviewed": 0,
+        "false_positive_rate": None,
+    }
+
+    always(monkeypatch, "flagged")
+    for _ in range(4):
+        score(client)
+    ids = [a["alert_id"] for a in client.get("/v1/alerts").json()["alerts"]]
+
+    # One escalated alert still open, one escalated alert that gets closed
+    for alert_id in ids[:2]:
+        session.get(FraudAlert, uuid.UUID(alert_id)).escalated = True
+    session.commit()
+
+    client.patch(f"/v1/alerts/{ids[1]}/review", json={"verdict": "confirmed"})
+    client.patch(f"/v1/alerts/{ids[2]}/review", json={"verdict": "false_positive"})
+
+    stats = client.get("/v1/alerts/stats").json()
+    assert stats["open"] == 2
+    assert stats["escalated"] == 1  # closed alerts no longer count
+    assert stats["closed_today"] == 2
+    assert stats["reviewed"] == 2
+    assert stats["false_positive_rate"] == 0.5
+
+    # Independent of list filters and page size
+    assert client.get("/v1/alerts?state=closed&limit=1").status_code == 200
+    assert client.get("/v1/alerts/stats").json() == stats
+
+
+def test_stats_route_is_not_treated_as_an_alert_id(client):
+    assert client.get("/v1/alerts/stats").status_code == 200
+
+
+def test_risky_transaction_is_flagged_by_the_real_model(client):
+    """No pinned threshold: the deployed model itself must flag this."""
+    res = score(client, amount_cents=300_000, occurred_at="2026-06-06T03:00:00Z")
+    assert res.json()["verdict"] == "flagged"
+    assert client.get("/v1/alerts").json()["total"] == 1
+
+
+def test_ordinary_transaction_is_approved_by_the_real_model(client):
+    res = score(client, amount_cents=4_500, occurred_at="2026-06-06T13:00:00Z")
+    assert res.json()["verdict"] == "approved"
+    assert client.get("/v1/alerts").json()["total"] == 0
+
+
+def test_seed_scores_everything_with_the_real_model(client, session):
+    import sys
+
+    from db.models import FraudAlert, FraudScore, ReviewerFeedback, Transaction
+    from ml import features
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+    import seed as seed_script
+
+    before = features._redis_client
+    counts = seed_script.seed(users=12)
+    assert features._redis_client is before  # stand-in Redis doesn't leak
+
+    assert session.query(Transaction).count() == counts["transactions"] > 0
+    scores = session.query(FraudScore).all()
+    assert {s.model_version for s in scores} == {"xgb-v2.0.0"}
+
+    alerts = session.query(FraudAlert).all()
+    assert len(alerts) == counts["alerts"]
+    flagged = {s.id for s in scores if s.score >= s.threshold_used}
+    assert {a.fraud_score_id for a in alerts} == flagged  # alerts only where flagged
+
+    closed = [a for a in alerts if a.state == "closed"]
+    assert session.query(ReviewerFeedback).count() == len(closed)
+
+    stats = client.get("/v1/alerts/stats").json()
+    assert stats["open"] == counts["open"]
+
+    # --reset replaces instead of adding
+    again = seed_script.seed(users=12, do_reset=True)
+    assert session.query(Transaction).count() == again["transactions"]

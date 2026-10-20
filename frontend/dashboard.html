@@ -249,9 +249,6 @@
   let currentFilter = 'open';
   let currentSeverity = '';
   let verdict = null;
-  let closedToday = 0;
-  let fpCount = 0;
-  let closedCount = 0;
 
   // ── Filters ──────────────────────────────────────────────────
 
@@ -279,7 +276,7 @@
       const data = await res.json();
       alerts = data.alerts || [];
       renderAlertList();
-      updateMetrics();
+      loadStats();
       document.getElementById('last-updated').textContent =
         new Date().toLocaleTimeString();
     } catch (e) {
@@ -305,7 +302,7 @@
       const slaMs = new Date(a.sla_deadline) - new Date();
       const slaPct = Math.max(0, Math.min(100, (slaMs / (4 * 3600 * 1000)) * 100));
       const slaColor = slaPct < 25 ? '#ef4444' : slaPct < 50 ? '#eab308' : '#22c55e';
-      const amount = a.amount_cents ? `$${(a.amount_cents/100).toLocaleString('en-US', {minimumFractionDigits:2})}` : '—';
+      const amount = formatMoney(a.amount_cents, a.currency);
       return `
         <div class="alert-item ${selectedAlert?.alert_id === a.alert_id ? 'selected' : ''} ${a.escalated ? 'escalated' : ''}"
              onclick="selectAlert('${a.alert_id}')">
@@ -346,9 +343,7 @@
 
   function renderDetail(a) {
     const isFlagged = a.score >= 0.4;
-    const amount = a.amount_cents
-      ? `$${(a.amount_cents/100).toLocaleString('en-US', {minimumFractionDigits:2})}`
-      : '—';
+    const amount = formatMoney(a.amount_cents, a.currency);
     const slaMs = new Date(a.sla_deadline) - new Date();
     const slaHrs = Math.floor(slaMs / 3600000);
     const slaMins = Math.floor((slaMs % 3600000) / 60000);
@@ -457,9 +452,6 @@
         body: JSON.stringify({ verdict, notes }),
       });
       if (res.ok) {
-        if (verdict === 'false_positive') fpCount++;
-        closedCount++;
-        closedToday++;
         showToast(`Verdict submitted: ${verdict.replace('_', ' ')}`, 'success');
         verdict = null;
         await loadAlerts();
@@ -480,17 +472,35 @@
 
   // ── Metrics ───────────────────────────────────────────────────
 
-  function updateMetrics() {
-    const open = alerts.filter(a => a.state === 'open').length;
-    const escalated = alerts.filter(a => a.escalated).length;
-    const fpr = closedCount > 0 ? ((fpCount / closedCount) * 100).toFixed(1) + '%' : '—';
-    document.getElementById('m-open').textContent = open;
-    document.getElementById('m-closed').textContent = closedToday;
-    document.getElementById('m-escalated').textContent = escalated;
-    document.getElementById('m-fpr').textContent = fpr;
+  // Queue-wide numbers from the API, so they don't depend on the current
+  // filter or on reviews done in this browser tab.
+  async function loadStats() {
+    try {
+      const res = await fetch(`${API}/alerts/stats`);
+      if (!res.ok) return;
+      const s = await res.json();
+      document.getElementById('m-open').textContent = s.open;
+      document.getElementById('m-closed').textContent = s.closed_today;
+      document.getElementById('m-escalated').textContent = s.escalated;
+      document.getElementById('m-fpr').textContent =
+        s.false_positive_rate === null ? '—' : (s.false_positive_rate * 100).toFixed(1) + '%';
+    } catch (e) {
+      // Leave the previous numbers in place; the alert list shows connection errors.
+    }
   }
 
+
   // ── Helpers ───────────────────────────────────────────────────
+
+  function formatMoney(cents, currency) {
+    if (cents === null || cents === undefined) return '—';
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' })
+        .format(cents / 100);
+    } catch {
+      return `${(cents / 100).toFixed(2)} ${currency || ''}`.trim();
+    }
+  }
 
   function timeAgo(iso) {
     const diff = Date.now() - new Date(iso);

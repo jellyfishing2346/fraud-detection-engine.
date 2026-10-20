@@ -1,5 +1,52 @@
 # 🤖 ML Model Guide
 
+## Current model: v2 (`xgb-v2.0.0`)
+
+The API scores transactions with **v2**, trained on exactly the seven features it computes at request time:
+
+| Feature | Source |
+|---|---|
+| `amount_log` | `log(1 + amount)` |
+| `hour_of_day`, `is_night` | Transaction time (night is 11pm to 5am) |
+| `velocity_1h`, `velocity_24h` | User's transaction count in Redis |
+| `geo_distance_km`, `is_new_location` | Distance from the user's last location in Redis |
+
+### Why v1 was replaced
+
+v1 (below) was trained on the Kaggle dataset, whose strongest signals are the anonymised `V1` to `V28` components. The API can't compute those, so at inference time they were always 0, and the velocity and location features the API builds weren't model inputs at all. Across every amount and hour of day, v1's score never exceeded 0.30, below the 0.4 threshold, so **no request to `/v1/score` could be flagged**.
+
+### Training data is synthetic
+
+No public dataset has these seven features, so `ml/synthetic.py` generates them. It simulates ordinary spending (including occasional big-ticket purchases and travel) and four fraud patterns: card testing, account takeover, bust-out, and camouflaged fraud that looks like normal spending. It also includes transactions with no velocity or location history, as happens when Redis is unavailable or a user is new. The distributions are documented assumptions, not measurements of real fraud.
+
+### Results on held-out synthetic data
+
+| Metric | Value |
+|---|---|
+| ROC AUC | 0.94 |
+| PR AUC | 0.74 |
+| Precision at 0.4 | 51% |
+| Recall at 0.4 | 72% |
+| Share of transactions flagged | 4.3% (true fraud rate 3%) |
+
+These numbers describe how well the model learns the simulation, not real-world performance. Behaviour on typical cases is pinned by tests in `backend/tests/test_model.py`: ordinary purchases (coffee, groceries, a laptop at the user's usual location, dinner while travelling) are approved, and card testing, account takeover and bust-out patterns are flagged, with and without Redis history.
+
+### Retraining
+
+```bash
+cd backend
+python -m ml.train_v2            # deterministic; writes models/xgb_fraud_v2.* and its metrics JSON
+```
+
+Training takes a few seconds. The API checks at startup that the model, scaler and feature list agree, so mismatched artifacts fail immediately instead of on the first request.
+
+---
+
+## Legacy model: v1 (Kaggle dataset)
+
+The rest of this guide documents v1, kept in `ml/train.py` and `models/xgb_fraud_v1.joblib` for reference.
+
+
 ## Dataset
 
 **Source:** [Kaggle Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)

@@ -40,3 +40,6 @@ data/
 *.log
 logs/
 .coverage
+
+# Model artifacts the API ships with (must come after the *.joblib rules)
+!backend/models/xgb_fraud_v*.joblib
