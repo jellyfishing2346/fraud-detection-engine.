@@ -5,6 +5,7 @@ from typing import Literal
 from db.models import FraudAlert, FraudScore, ReviewerFeedback, Transaction, get_session
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -16,6 +17,8 @@ router = APIRouter()
 class AlertSummary(BaseModel):
     alert_id: uuid.UUID
     transaction_id: uuid.UUID
+    amount_cents: int
+    currency: str
     score: float
     severity: str
     state: str
@@ -68,7 +71,17 @@ def list_alerts(
     cursor: str | None = Query(None, description="created_at cursor for pagination"),
     db: Session = Depends(get_session),
 ):
-    query = db.query(FraudAlert)
+    # One query for alerts plus the score and amount shown in the list
+    query = (
+        db.query(
+            FraudAlert,
+            FraudScore.score,
+            Transaction.amount_cents,
+            Transaction.currency,
+        )
+        .join(FraudScore, FraudAlert.fraud_score_id == FraudScore.id)
+        .join(Transaction, FraudAlert.transaction_id == Transaction.id)
+    )
 
     if state:
         query = query.filter(FraudAlert.state == state)
@@ -84,28 +97,77 @@ def list_alerts(
             ) from None
 
     total = query.count()
-    alerts = query.order_by(FraudAlert.created_at.desc()).limit(limit).all()
+    rows = query.order_by(FraudAlert.created_at.desc()).limit(limit).all()
 
     next_cursor = None
-    if len(alerts) == limit:
-        next_cursor = alerts[-1].created_at.isoformat()
+    if len(rows) == limit:
+        next_cursor = rows[-1][0].created_at.isoformat()
 
     return AlertListResponse(
         alerts=[
             AlertSummary(
                 alert_id=a.id,
                 transaction_id=a.transaction_id,
-                score=float(a.fraud_score.score) if a.fraud_score else 0.0,
+                amount_cents=amount_cents,
+                currency=currency,
+                score=float(score),
                 severity=a.severity,
                 state=a.state,
                 sla_deadline=a.sla_deadline,
                 escalated=a.escalated,
                 created_at=a.created_at,
             )
-            for a in alerts
+            for a, score, amount_cents, currency in rows
         ],
         total=total,
         next_cursor=next_cursor,
+    )
+
+
+# ─── GET /alerts/stats ────────────────────────────────────────────────────────
+
+
+class AlertStats(BaseModel):
+    open: int
+    in_review: int
+    escalated: int
+    closed_today: int
+    reviewed: int
+    false_positive_rate: float | None
+
+
+# Declared before /alerts/{alert_id} so "stats" isn't parsed as an alert ID.
+@router.get("/alerts/stats", response_model=AlertStats)
+def alert_stats(db: Session = Depends(get_session)):
+    """Queue-wide counts for the dashboard, independent of any list filter."""
+    by_state = dict(
+        db.query(FraudAlert.state, func.count()).group_by(FraudAlert.state).all()
+    )
+    escalated = (
+        db.query(func.count())
+        .select_from(FraudAlert)
+        .filter(FraudAlert.escalated.is_(True), FraudAlert.state != "closed")
+        .scalar()
+    )
+    start_of_day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    closed_today = (
+        db.query(func.count())
+        .select_from(ReviewerFeedback)
+        .filter(ReviewerFeedback.reviewed_at >= start_of_day)
+        .scalar()
+    )
+    reviewed, false_positives = db.query(
+        func.count(),
+        func.count().filter(ReviewerFeedback.verdict == "false_positive"),
+    ).one()
+
+    return AlertStats(
+        open=by_state.get("open", 0),
+        in_review=by_state.get("in_review", 0),
+        escalated=escalated,
+        closed_today=closed_today,
+        reviewed=reviewed,
+        false_positive_rate=(false_positives / reviewed) if reviewed else None,
     )
 
 

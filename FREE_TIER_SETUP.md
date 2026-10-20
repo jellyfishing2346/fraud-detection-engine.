@@ -50,7 +50,7 @@ REDIS_CONSUMER_GROUP=fraud-scorer
 REDIS_CONSUMER_NAME=fraud-scorer-1
 
 # ─── ML Model ───────────────────────────────────────────────
-MODEL_PATH=models/xgb_fraud_v1.joblib
+# MODEL_PATH defaults to backend/models/xgb_fraud_v2.joblib; set it only to override
 FRAUD_SCORE_THRESHOLD=0.4
 
 # ─── App ─────────────────────────────────────────────────────

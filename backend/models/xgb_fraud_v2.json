@@ -1,0 +1,26 @@
+{
+  "model_version": "xgb-v2.0.0",
+  "trained_at": "2026-10-19",
+  "training_data": "synthetic (ml/synthetic.py)",
+  "rows": 200000,
+  "seed": 42,
+  "threshold": 0.4,
+  "features": [
+    "amount_log",
+    "hour_of_day",
+    "is_night",
+    "velocity_1h",
+    "velocity_24h",
+    "geo_distance_km",
+    "is_new_location"
+  ],
+  "metrics": {
+    "roc_auc": 0.9415,
+    "pr_auc": 0.7389,
+    "precision_at_threshold": 0.5071,
+    "recall_at_threshold": 0.7192,
+    "flag_rate": 0.0425,
+    "test_rows": 40000,
+    "test_fraud_rate": 0.03
+  }
+}

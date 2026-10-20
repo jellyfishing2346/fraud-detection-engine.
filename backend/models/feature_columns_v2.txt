@@ -1,0 +1,7 @@
+amount_log
+hour_of_day
+is_night
+velocity_1h
+velocity_24h
+geo_distance_km
+is_new_location
