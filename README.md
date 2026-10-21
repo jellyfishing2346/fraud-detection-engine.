@@ -56,14 +56,18 @@ Transaction arrives → Kafka → ML Scoring (2ms) → Approved ✓
 
 ## Performance
 
+Model v2, measured on held-out **synthetic** data (40,000 transactions). These describe how well the model learns the simulation, not real-world performance; see [ML_MODEL.md](ML_MODEL.md).
+
 | Metric | Result |
 |---|---|
-| 🎯 Fraud recall | **89%** — catches 89 of every 100 real fraud cases |
-| 📈 ROC-AUC | **0.98** — near-perfect class separation |
+| 🎯 Fraud recall | **72%** at the 0.4 threshold |
+| 🔍 Precision | **51%** — about half of flagged transactions are fraud |
+| 🔍 False positive rate | **2.2%** of legitimate transactions flagged for review |
+| 📈 ROC-AUC / PR-AUC | **0.94 / 0.74** |
 | ⚡ Scoring latency (warm) | **2–3ms** — Redis feature cache |
 | ⚡ Scoring latency (cold) | **27ms** — first request |
-| 🔍 False positive rate | **0.08%** — 8 in 10,000 legit transactions flagged |
-| 📦 Training dataset | **284,807 transactions** |
+
+The original v1 model reached 89% recall and 0.98 ROC-AUC on the Kaggle credit card dataset, but relied on features the live API can't compute, so it couldn't flag real requests. [ML_MODEL.md](ML_MODEL.md) explains the switch.
 
 ---
 
@@ -219,7 +223,7 @@ cd backend && python3.12 -m pytest tests/ -v
 | Week | Milestone |
 |---|---|
 | **Week 1** | Docker stack · PostgreSQL schema · project structure |
-| **Week 2** | XGBoost training · SMOTE oversampling · recall 0.89 |
+| **Week 2** | XGBoost training (v1, Kaggle) · SMOTE oversampling · recall 0.89 |
 | **Week 3** | FastAPI scoring API · model inference · 41ms cold latency |
 | **Week 4** | Redis velocity features · haversine geo-distance · 2ms warm |
 | **Week 5** | pytest suite 6/6 · SLA escalation job · branch protection |
