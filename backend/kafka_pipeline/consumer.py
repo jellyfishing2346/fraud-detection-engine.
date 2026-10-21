@@ -13,13 +13,15 @@ Usage:
 import json
 import os
 import sys
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaConsumer, KafkaProducer, TopicPartition
+from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.orm import Session
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../.env"))
@@ -148,6 +150,9 @@ def process_message(
 # ─── Main consumer loop ───────────────────────────────────────────────────────
 
 
+MAX_RETRY_DELAY_SECONDS = 30
+
+
 def run() -> None:
     print("Loading ML model...")
     load_model()
@@ -174,6 +179,7 @@ def run() -> None:
     print(f"Listening on '{TOPIC_RAW}' (group: {CONSUMER_GROUP})...")
     print("Press Ctrl+C to stop.\n")
 
+    failures = 0  # consecutive database failures, for backoff
     try:
         for message in consumer:
             kafka_offset = message.offset
@@ -189,10 +195,24 @@ def run() -> None:
                     process_message(msg, kafka_offset, db, producer)
                 # Commit offset only after successful DB write
                 consumer.commit()
+                failures = 0
+
+            except (OperationalError, InterfaceError) as e:
+                # Database unreachable: rewind so this message is delivered
+                # again, and back off. Committing here would skip it for good.
+                failures += 1
+                delay = min(MAX_RETRY_DELAY_SECONDS, 2 ** (failures - 1))
+                print(f"  [RETRY] Database unavailable ({e}); retrying in {delay}s")
+                consumer.seek(
+                    TopicPartition(message.topic, message.partition), kafka_offset
+                )
+                time.sleep(delay)
 
             except Exception as e:
-                print(f"  [ERROR] Failed to process message: {e}")
-                # Don't commit — message will be reprocessed on restart
+                # Bad message (e.g. malformed payload): retrying won't help.
+                # Skip it so it can't block the partition.
+                print(f"  [SKIP] Failed to process message: {e}")
+                consumer.commit()
 
     except KeyboardInterrupt:
         print("\nShutting down consumer...")

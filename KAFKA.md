@@ -151,10 +151,18 @@ for message in consumer:
         with Session(engine) as db:
             process_message(message, db)
         consumer.commit()       # ← commit AFTER DB write succeeds
-    except Exception as e:
-        print(f"Error: {e}")
-        # DO NOT commit — message will be replayed on restart
+    except (OperationalError, InterfaceError):
+        # Database unreachable: rewind to this message and back off
+        # (1s, 2s, 4s ... capped at 30s). Never commit past it.
+        consumer.seek(TopicPartition(message.topic, message.partition), message.offset)
+        time.sleep(delay)
+    except Exception:
+        # Malformed message: retrying won't help, so skip it and commit,
+        # otherwise one bad message would block the partition forever.
+        consumer.commit()
 ```
+
+Only connection failures are retried. Errors caused by the message itself (a malformed payload, a value too long for a column) would fail on every retry, so those are skipped instead.
 
 **Why this matters:** If the consumer crashes after writing to Postgres but before committing the offset, the message will be replayed on restart. The `kafka_offset` uniqueness check catches this duplicate and skips it.
 
@@ -189,10 +197,10 @@ For this project, a single consumer instance handles all 12 partitions. In produ
 | Scenario | Behaviour |
 |---|---|
 | Consumer crashes mid-message | Offset not committed → message replayed → `kafka_offset` dedup skips it |
-| Postgres unavailable | Consumer logs error, does not commit → message replayed when Postgres recovers |
+| Postgres unavailable | Consumer rewinds to the failed message and retries with backoff (up to 30s) → processed once Postgres recovers, nothing skipped |
 | Redis unavailable | Features default to 0 → scoring continues with degraded accuracy |
 | Kafka broker unavailable | Consumer retries with exponential backoff → no data loss |
-| Message with invalid format | Error logged → message skipped (dead-letter queue recommended in production) |
+| Message with invalid format | Error logged → message skipped and committed (a dead-letter topic would keep a copy; recommended in production) |
 
 ---
 
@@ -202,7 +210,7 @@ Watch the consumer output for real-time stats:
 
 ```
 Loading ML model...
-Model loaded: xgb-v1.0.0 (31 features)
+Model loaded: xgb-v2.0.0 (7 features)
 Listening on 'transactions.raw' (group: fraud-scorer)...
 
 Received offset=0 txn=20bbf198...

@@ -34,8 +34,8 @@ python3.12 -m pip install -r requirements.txt
 pip install pre-commit ruff
 pre-commit install   # hooks run on every commit
 
-# 6. Train the model (requires Kaggle dataset)
-python3.12 ml/train.py --data notebooks/creditcard.csv
+# 6. (Optional) Retrain the model; the trained v2 model ships in backend/models/
+python3.12 -m ml.train_v2
 
 # 7. Seed test data
 python3.12 scripts/seed.py
