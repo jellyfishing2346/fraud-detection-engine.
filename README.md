@@ -233,6 +233,12 @@ cd backend && python3.12 -m pytest tests/ -v
 
 ---
 
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
+
+---
+
 <div align="center">
 
 Built by **[@jellyfishing2346](https://github.com/jellyfishing2346)** · 8 weeks · Solo
