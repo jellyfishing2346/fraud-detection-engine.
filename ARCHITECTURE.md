@@ -89,7 +89,7 @@ The consumer writes to Postgres in a single database transaction:
 The Kafka offset is committed **after** the DB write. This is the critical idempotency mechanism.
 
 ### Step 6 — Review
-If flagged, the alert appears in the reviewer dashboard. The reviewer submits a verdict via `PATCH /v1/alerts/{id}/review`. The verdict is stored in `reviewer_feedback` for weekly model retraining.
+If flagged, the alert appears in the reviewer dashboard. The reviewer submits a verdict via `PATCH /v1/alerts/{id}/review`. The verdict is stored in `reviewer_feedback`, where it can serve as labelled data for future retraining (not yet automated).
 
 ---
 
@@ -135,7 +135,7 @@ TTL:   604,800 seconds (7 days)
 |---|---|
 | Consumer crashes mid-batch | Uncommitted offsets are replayed on restart; `kafka_offset` dedup prevents double-scoring |
 | Redis unavailable | Feature builder returns zeros; scoring continues with degraded features |
-| Postgres unavailable | Consumer logs error, does NOT commit Kafka offset; message is replayed |
+| Postgres unavailable | Consumer rewinds to the failed message and retries with backoff (up to 30s); the offset is never committed past it |
 | Model not loaded | API returns 500 immediately; consumer refuses to start |
 | SLA breach | `escalate_alerts.py` job marks alerts as `escalated=True` |
 

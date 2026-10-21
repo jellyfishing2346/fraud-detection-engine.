@@ -35,13 +35,22 @@ class FakeProducer:
 
 
 class FakeConsumer:
+    """Delivers messages in order; seek() re-delivers one, like Kafka."""
+
     def __init__(self, messages):
-        self.messages = messages
+        self.pending = list(messages)
+        self.by_offset = {m.offset: m for m in messages}
         self.commits = 0
+        self.seeks = []
         self.closed = False
 
     def __iter__(self):
-        return iter(self.messages)
+        while self.pending:
+            yield self.pending.pop(0)
+
+    def seek(self, partition, offset):
+        self.seeks.append(offset)
+        self.pending.insert(0, self.by_offset[offset])
 
     def commit(self):
         self.commits += 1
@@ -110,28 +119,76 @@ def test_severity_matches_the_api(score, expected):
 # ─── Consumer loop ────────────────────────────────────────────────────────────
 
 
-def test_run_commits_after_each_processed_message_and_survives_errors(monkeypatch):
-    msgs = [SimpleNamespace(offset=i, value=message()) for i in range(3)]
+def _run_with(monkeypatch, msgs, process):
     fake_consumer, fake_producer = FakeConsumer(msgs), FakeProducer()
-    processed = []
-
-    def process(msg, offset, db, prod):
-        if offset == 1:
-            raise ValueError("bad message")
-        processed.append(offset)
-
+    sleeps = []
     monkeypatch.setattr(consumer, "load_model", lambda: None)
     monkeypatch.setattr(consumer, "get_engine", lambda: None)
     monkeypatch.setattr(consumer, "Session", lambda engine: contextlib.nullcontext())
     monkeypatch.setattr(consumer, "KafkaConsumer", lambda *a, **kw: fake_consumer)
     monkeypatch.setattr(consumer, "KafkaProducer", lambda **kw: fake_producer)
     monkeypatch.setattr(consumer, "process_message", process)
-
+    monkeypatch.setattr(consumer.time, "sleep", sleeps.append)
     quietly(consumer.run)
+    return fake_consumer, fake_producer, sleeps
 
-    assert processed == [0, 2]  # one bad message doesn't stop the consumer
-    assert fake_consumer.commits == 2  # offsets committed only after success
+
+def kafka_message(offset):
+    return SimpleNamespace(
+        topic="transactions.raw", partition=0, offset=offset, value=message()
+    )
+
+
+def test_bad_message_is_skipped_without_blocking_the_queue(monkeypatch):
+    processed = []
+
+    def process(msg, offset, db, prod):
+        if offset == 1:
+            raise ValueError("malformed payload")
+        processed.append(offset)
+
+    fake_consumer, fake_producer, sleeps = _run_with(
+        monkeypatch, [kafka_message(i) for i in range(3)], process
+    )
+    assert processed == [0, 2]
+    assert fake_consumer.commits == 3  # bad message committed past, not retried
+    assert fake_consumer.seeks == [] and sleeps == []
     assert fake_consumer.closed and fake_producer.closed
+
+
+def test_database_outage_retries_the_same_message_instead_of_losing_it(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    processed = []
+    outage = {"remaining": 3}
+
+    def process(msg, offset, db, prod):
+        if offset == 1 and outage["remaining"]:
+            outage["remaining"] -= 1
+            raise OperationalError("SELECT 1", {}, Exception("connection refused"))
+        processed.append(offset)
+
+    fake_consumer, _, sleeps = _run_with(
+        monkeypatch, [kafka_message(i) for i in range(3)], process
+    )
+    assert processed == [0, 1, 2]  # message 1 eventually processed, in order
+    assert fake_consumer.seeks == [1, 1, 1]  # rewound once per failed attempt
+    assert sleeps == [1, 2, 4]  # exponential backoff
+    assert fake_consumer.commits == 3  # never committed past the failure
+
+
+def test_backoff_is_capped(monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    outage = {"remaining": 8}
+
+    def process(msg, offset, db, prod):
+        if outage["remaining"]:
+            outage["remaining"] -= 1
+            raise OperationalError("SELECT 1", {}, Exception("down"))
+
+    _, _, sleeps = _run_with(monkeypatch, [kafka_message(0)], process)
+    assert sleeps == [1, 2, 4, 8, 16, 30, 30, 30]
 
 
 # ─── Message processing (Postgres) ────────────────────────────────────────────
